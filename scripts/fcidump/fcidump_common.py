@@ -130,3 +130,34 @@ def write_manifest(path, manifest):
     with open(path, "w") as fh:
         json.dump(manifest, fh, indent=2)
         fh.write("\n")
+
+
+def write_molden(path, mol, mo_coeff, nelec_active=None, labels=None, mo_energy=None):
+    """Write the MOs as a Molden file, for GaussView/Molden/Avogadro/Jmol/Multiwfn.
+
+    The sidecar JSON carries the MO coefficients but no basis set, and a viewer cannot
+    render an orbital without the GTOs: the contraction has to come from ``mol``, which is
+    why this lives beside ``write_sidecar`` and takes the same arguments. ``mol`` must be
+    the Mole the coefficients were produced with -- same basis, same ``cartesian``
+    setting -- or the AO ordering silently will not match and the pictures are wrong.
+
+    ``mo_coeff`` is (nAO x nMO) for the MOs actually dumped, i.e. the ACTIVE space when the
+    deck froze a core. The Molden file then numbers them 1..nMO, which is exactly how
+    ADCgo numbers orbitals in its own output, so ``<55|`` in a state listing is orbital 55
+    here with no offset to apply.
+
+    ``nelec_active`` sets the occupations (doubly occupied up to nelec_active/2); without it
+    every orbital is written unoccupied, which still renders but loses HOMO/LUMO. Orbital
+    energies are not part of the sidecar, so ``mo_energy`` defaults to zeros -- viewers use
+    them only for labelling and sorting, not for the isosurfaces.
+    """
+    from pyscf.tools import molden
+
+    nmo = mo_coeff.shape[1]
+    occ = numpy.zeros(nmo)
+    if nelec_active is not None:
+        occ[: nelec_active // 2] = 2.0
+    ene = numpy.zeros(nmo) if mo_energy is None else numpy.asarray(mo_energy)
+    with open(path, "w") as fh:
+        molden.header(mol, fh)
+        molden.orbital_coeff(mol, fh, mo_coeff, ene=ene, occ=occ, symm=labels)

@@ -272,12 +272,22 @@ def dump(cfg):
     print(f"wrote {fcidump_path}  NORB={norb} NELEC={nelec} "
           f"nocc={nelec // 2} ncore_frozen={ncore}")
 
+    args_molden = cfg.resolve(cfg.molden) if getattr(cfg, "molden", None) else None
     if cfg.sidecar:
         side = cfg.resolve(cfg.sidecar)
         doc = fcidump_common.write_sidecar(side, mol, mo_side, mf.get_ovlp(),
                                            dm=mf.make_rdm1(), labels=labels)
         print(f"wrote {side}  nAO={doc['nao']} atoms={doc['atom_names']} "
               f"dipole_origin={doc['dip_origin']}")
+
+        # The sidecar is for ADCgo; a Molden file beside it is for the human, and is the
+        # only artifact here that a GUI can render -- the sidecar has the coefficients but
+        # no basis set, and no viewer can draw an orbital without the GTOs.
+        if args_molden:
+            fcidump_common.write_molden(args_molden, mol, mo_side,
+                                        nelec_active=int(nelec), labels=labels)
+            print(f"wrote {args_molden}  {mo_side.shape[1]} MOs, "
+                  f"{int(nelec) // 2} occupied (orbital numbering matches ADCgo's)")
 
     if cfg.manifest:
         man = cfg.resolve(cfg.manifest)
@@ -340,6 +350,7 @@ def config_from_args(args):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--molden", help="also write the MOs as a Molden file for GaussView/Molden/Avogadro/Jmol/Multiwfn; orbital numbering matches ADCgo's, so <55| in a state listing is MO 55 here")
     p.add_argument("--input", help="sectioned input file (see adcgo_input.py)")
     p.add_argument("--zmat", "--geometry", dest="zmat",
                    help="geometry file: GAMESS-UK zmat, .xyz, or Cartesian list")
@@ -368,6 +379,8 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     cfg = parse_input_file(args.input) if args.input else config_from_args(args)
+    if getattr(args, "molden", None):
+        cfg.molden = args.molden
     dump(cfg)
 
 

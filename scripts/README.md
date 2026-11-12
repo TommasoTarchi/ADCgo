@@ -119,3 +119,23 @@ Auger when they are on the initially ionized monomer and ETMD(2) when they are o
 exactly what the factor 2 on `-ref-scale` counts. The split is 1:1 and exact for a homodimer, so
 `-mode panel` with `-ref-sip/-ref-dip` draws them as separate curves (ETMD(2) dashed, because it
 coincides with Auger).
+
+### Visualizing the MOs (GaussView, Molden, Avogadro, Jmol, Multiwfn)
+
+The `.mo.json` sidecar carries the MO coefficients but **no basis set**, and no viewer can draw an
+orbital without the GTOs. `--molden` writes a Molden file from the same MOs the FCIDUMP was built
+from:
+
+```sh
+python scripts/fcidump/dump_fcidump.py --input examples/melanin/melanin.in --molden melanin.molden
+```
+
+- **Orbital numbering matches ADCgo's**, because both count the ACTIVE space: `<55|` in a state
+  listing is MO 55 in the viewer, no offset. For melanin the active space is 222 MOs with 110
+  electrons, so MO 55 is the HOMO — and the first SIP state's leading term is indeed `<55|`.
+- **Orbital energies are not in the sidecar**, so they are written as zeros. Viewers use them only
+  for labelling and sorting; isosurfaces are unaffected.
+- To write one from an EXISTING sidecar without re-running SCF, rebuild the Mole from the same deck
+  (`build_mol(parse_input_file(deck))`) and call `fcidump_common.write_molden` with the stored
+  `mo_coeff`. Check `ao_atom` against the sidecar first — if the AO ordering differs the file is
+  silently wrong, not broken.
