@@ -69,8 +69,9 @@ plotspec -mode ees-diff ... -ref-twosite -twosite-shift 4.2
 ```
 
 - `-twosite-shift` is the hole-hole Coulomb repulsion `e^2/R`, which the strict R->inf reference omits
-  but a dimer at contact does not: `14.4/R(Angstrom)` eV, i.e. **4.20 eV** at naph2's 3.425 A
-  interplanar separation. Default 0 = the strict non-interacting limit.
+  but a dimer at contact does not: `14.4/R(Angstrom)` eV. Use the monomer **centroid** separation, not
+  the interplanar gap: naph2's stack is slipped, so R = **3.62 A** (-> 3.98 eV), not 3.43 A (4.20 eV).
+  Default 0 = the strict non-interacting limit.
 - `-twosite-weight` defaults to 0.5, the non-interacting state count, chosen so `-ref-scale 2` stays
   correct: an overall factor on the final-state spectrum cancels between sigma's numerator and its
   `N(E)` denominator, so only the one-site:two-site ratio and the initial-state scale matter.
@@ -78,3 +79,43 @@ plotspec -mode ees-diff ... -ref-twosite -twosite-shift 4.2
   multiplicity (each spatial two-site configuration supports a singlet and a triplet). Use
   `-twosite-weight` if a different convention is wanted.
 - Cost: `N^2` synthetic states. 573 SIP lines -> 328k states, convolved in ~8 s.
+
+### Decay-channel spectra: define the SITES or the channels are meaningless
+
+`-mode panel` colours panel (b) by decay channel, which needs a DIP spectrum converted with
+`-spectrum -mo` rather than `-bare` (a `-bare` spectrum has one `states` channel and nothing to group
+by). Two flags decide whether the result means anything.
+
+```sh
+# WRONG: no -group, so every ATOM is its own site
+adcgo -convert naph2.dip.json -dip -spectrum -mo naph2.mo.json -init-atom C1 -out bad.spec.json
+#   -> 38 channels (Auger@C1, ICD:C1->C2 ... ETMD(3)); ETMD(3) takes 91% of the weight
+
+# RIGHT: fold the atoms into the chemical units the channels are about
+A=C1,C2,C3,C4,C5,C6,C7,C8,C9,C10,H1,H2,H3,H4,H5,H6,H7,H8
+B=C11,C12,C13,C14,C15,C16,C17,C18,C19,C20,H9,H10,H11,H12,H13,H14,H15,H16
+adcgo -convert naph2.dip.json -dip -spectrum -mo naph2.mo.json \
+      -group="A=$A" -group="B=$B" -init-atom A -out naph2.dip.frag.spec.json
+#   -> Auger@A / ICD:A->B / ETMD(2); naph2: 22% / 56% / 22% in the EES window
+```
+
+The classifier routes each state by **where its two holes sit relative to the initially ionized
+site**: both on A = Auger, one on A one on B = ICD, both on one site != A = ETMD(2), two sites != A =
+ETMD(3). The default is *each population column its own site*, so with 36 atomic sites "two different
+sites" is satisfied by almost every state and ETMD(3) swallows the spectrum. That 91% is an artefact
+of the site definition, not physics. With two sites ETMD(3) is structurally impossible.
+
+- `-init-atom` defaults to **"O"** and fails outright on a hydrocarbon ("initial site \"O\" is not one
+  of the defined sites"). With `-group` it takes a SITE name.
+- Free correctness check on a homodimer: `Auger@A` and `ETMD(2)` must be equal by the A<->B symmetry.
+  naph2 gives 420.149 each.
+- `-point-group C2` records the point group in the spectrum meta, so `plotspec -panel-sym` can label
+  irreps without `-irrep-labels`.
+- `plotspec -dip-family` collapses the channels onto Auger / ICD / ETMD for the figure, keeping three
+  canonical hues; without it the shared key grows one row per atom pair and buries the panels.
+
+**Panel (c)'s one-site family is Auger + ETMD(2), not "Auger" alone.** "Both holes on one monomer" is
+Auger when they are on the initially ionized monomer and ETMD(2) when they are on the other, which is
+exactly what the factor 2 on `-ref-scale` counts. The split is 1:1 and exact for a homodimer, so
+`-mode panel` with `-ref-sip/-ref-dip` draws them as separate curves (ETMD(2) dashed, because it
+coincides with Auger).

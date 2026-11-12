@@ -75,6 +75,7 @@ type specLine struct {
 	Intensity float64 `json:"intensity"`
 	Channel   string  `json:"channel"`
 	Spin      int     `json:"spin"`
+	Irrep     int     `json:"irrep"`
 	StateRef  string  `json:"state_ref"`
 }
 
@@ -100,13 +101,13 @@ func main() {
 
 func run() error {
 	var (
-		mode         = flag.String("mode", "spectrum", "plot mode: \"spectrum\" (single DIP/SIP JSON via -in), \"tdm\" (transition-dipole spectrum from an adcgo -tdm JSON via -in), \"ees\" (electron-emission spectrum from -sip + -dip), \"panel\", \"stack\" (energy-offset waterfall of several conformers' spectra), or \"ees-diff\" (one electron-emission spectrum minus a scaled reference one, e.g. dimer - 2x monomer)")
+		mode         = flag.String("mode", "spectrum", "plot mode: \"spectrum\" (single DIP/SIP JSON via -in), \"tdm\" (transition-dipole spectrum from an adcgo -tdm JSON via -in), \"ees\" (electron-emission spectrum from -sip + -dip), \"panel\" (SIP/DIP sticks plus the electron spectrum; with -ref-sip/-ref-dip panel (c) decomposes into Auger-Meitner vs ICD), \"stack\" (energy-offset waterfall of several conformers' spectra), or \"ees-diff\" (one electron-emission spectrum minus a scaled reference one, e.g. dimer - 2x monomer)")
 		sipPath      = flag.String("sip", "", "ees mode: single-ionization spectrum JSON (S_in)")
-		refSIP       = flag.String("ref-sip", "", "ees-diff mode: the REFERENCE system's single-ionization spectrum JSON (e.g. the counterpoise monomer)")
-		refDIP       = flag.String("ref-dip", "", "ees-diff mode: the REFERENCE system's double-ionization spectrum JSON")
-		refScale     = flag.Float64("ref-scale", 2, "ees-diff mode: multiplier on the reference electron spectrum before subtraction; 2 for a homodimer against one monomer")
+		refSIP       = flag.String("ref-sip", "", "ees-diff and panel modes: the REFERENCE system's single-ionization spectrum JSON (e.g. the counterpoise monomer). In panel mode, setting this and -ref-dip turns panel (c) into the mechanism decomposition: the scaled non-interacting background as stacked Auger-Meitner (one-site) and ICD (two-site) bands, with the system drawn over them")
+		refDIP       = flag.String("ref-dip", "", "ees-diff and panel modes: the REFERENCE system's double-ionization spectrum JSON")
+		refScale     = flag.Float64("ref-scale", 2, "ees-diff and panel modes: multiplier on the reference electron spectrum before subtraction; 2 for a homodimer against one monomer")
 		refLabel     = flag.String("ref-label", "", "ees-diff mode: legend label for the scaled reference; default \"<scale>x reference\"")
-		dataPath     = flag.String("data", "", "ees-diff mode: also write the three curves (eps, system, scaled reference, difference) as TSV to this path")
+		dataPath     = flag.String("data", "", "ees-diff mode: also write the three curves (eps, system, scaled reference, difference) as TSV to this path. In panel mode with -ref-sip/-ref-dip, writes panel (c) as eps, system, Auger-Meitner, ICD, reference total, difference")
 		refTwoSite   = flag.Bool("ref-twosite", false, "ees-diff mode: complete the non-interacting reference with the TWO-SITE final states (one hole per monomer), built by self-convolving -ref-sip. Without it the reference has only one-site channels and the residual conflates the missing two-site family with real interaction effects")
 		twoSiteW     = flag.Float64("twosite-weight", 0.5, "ees-diff mode: weight of the two-site term relative to ONE monomer's DIP; 0.5 is the non-interacting state count, and keeps -ref-scale 2 correct (see runEESDiff)")
 		twoSiteShift = flag.Float64("twosite-shift", 0, "ees-diff mode: energy added to each two-site final state (eV), the hole-hole Coulomb repulsion e^2/R. 0 is the strict R->inf limit; ~14.4/R(Angstrom) eV is the point-charge estimate, i.e. ~4.2 eV at naphthalene-dimer contact")
@@ -160,6 +161,9 @@ func run() error {
 		stackInset     = flag.Float64("stack-inset", 0.2, "stack mode: structure-inset width as a fraction of the energy axis; 0 draws no insets")
 		stackTitle     = flag.String("stack-title", "Conformer-resolved single-ionization spectra", "stack mode: figure title")
 	)
+	dipFamily := flag.Bool("dip-family", false, "panel mode: collapse the DIP decay channels onto their family -- Auger, ICD, ETMD -- for panels (b)/(c) and the shared key. `adcgo -convert -dip -spectrum -mo` classifies per atom pair, which on anything larger than a dimer of small molecules means dozens of channels and a key that buries the figure; this keeps the mechanism and three canonical hues")
+	panelSym := flag.Bool("panel-sym", false, "panel mode: group panels (a) and (b) by SYMMETRY -- the SIP sticks by irrep, the DIP sticks by spin multiplicity and irrep -- instead of by the channel labels carried in the spectrum. Reads each line's irrep/spin fields, so it works on a -bare spectrum that has no decay-channel decomposition at all (every stick sits in one \"states\" channel)")
+	irrepLabels := flag.String("irrep-labels", "", "panel mode with -panel-sym: comma-separated irrep names in irrep order, e.g. \"A,B\" for C2. Default is \"irrep N\" -- a spectrum JSON does not record the point group, so Mulliken labels cannot be inferred from it")
 	flag.Var(&stackEntries, "stack", "stack mode: add one trace as LABEL=PATH[@OFFSET], the offset in -offset-unit (repeatable); combines with -stack-manifest")
 	flag.Var(sipGroupFlag{specs: &sipGroups, interactive: &sipGroupI}, "sip-group", "panel mode: group panel (a) MOs. Bare \"-sip-group\" opens an interactive dialogue listing every MO; or pass a spec \"-sip-group=core=1,2\" (MO numbers, or symN for a whole symmetry), append #RRGGBB to the label for a custom colour, e.g. \"-sip-group=core#e41a1c=1,2\" (repeatable)")
 	flag.Parse()
@@ -214,6 +218,10 @@ func run() error {
 			sipGroups: sipGroups, sipGroupI: sipGroupI, overlay: *overlay, stickHeight: *stickHeight,
 			absolute: *absolute, spinWeight: *spinWeight,
 			width: *width, height: *height, dpi: *dpi,
+			refSIP: *refSIP, refDIP: *refDIP, refScale: *refScale,
+			twoSiteWeight: *twoSiteW, twoSiteShift: *twoSiteShift,
+			dataOut: *dataPath,
+			panelSym: *panelSym, irrepLabels: *irrepLabels, dipFamily: *dipFamily,
 		})
 	case "spectrum":
 		// fall through to the single-spectrum renderer below
@@ -833,6 +841,10 @@ type eesDiffParams struct {
 // in particular it applies no spin multiplicity -- each spatial two-site configuration supports a
 // singlet and a triplet, and which convention matches the dimer's own -spin both counting is a
 // modelling choice, left to -twosite-weight rather than guessed at here.
+// twoSiteChannel labels the synthetic one-hole-per-monomer final states. Panel mode's
+// decomposition keys the ICD family off this exact name, so the two must not drift.
+const twoSiteChannel = "two-site"
+
 func twoSiteLines(sip []specLine, weight, shift float64) []specLine {
 	out := make([]specLine, 0, len(sip)*len(sip))
 	for _, a := range sip {
@@ -846,7 +858,7 @@ func twoSiteLines(sip []specLine, weight, shift float64) []specLine {
 			out = append(out, specLine{
 				Energy:    a.Energy + b.Energy + shift,
 				Intensity: weight * a.Intensity * b.Intensity,
-				Channel:   "two-site",
+				Channel:   twoSiteChannel,
 			})
 		}
 	}
@@ -1074,6 +1086,16 @@ type panelParams struct {
 	absolute, spinWeight            bool
 	width, height                   float64
 	dpi                             int
+	// Reference system for panel (c)'s mechanism decomposition. When refSIP and
+	// refDIP are both set, panel (c) stops being a single curve and becomes the
+	// non-interacting background (Auger-Meitner + ICD) with the system drawn over it.
+	refSIP, refDIP              string
+	refScale                    float64
+	twoSiteWeight, twoSiteShift float64
+	dataOut                     string
+	panelSym                    bool
+	irrepLabels                 string
+	dipFamily                   bool
 }
 
 // runPanel renders the composite figure: panel (a) SIP sticks (grouped by
@@ -1140,11 +1162,26 @@ func runPanel(p panelParams) error {
 	if err != nil {
 		return err
 	}
-	aLines, aOrder := groupSIPByGroup(sipSpec.Lines, groupOrder, moToLabel, symToLabel)
-	// Panel (a)'s symmetry groups are unrelated to the decay channels, so colour
-	// them from the generated colours (past the curated palette) to avoid implying
-	// a shared meaning with (b)/(c), unless a group requested a custom colour via
-	// -sip-group. It keeps its own legend.
+	irrepNames := parseIrrepLabels(p.irrepLabels)
+
+	// Panel (a): -panel-sym groups the SIP sticks by irrep instead of by which MO was
+	// ionized, so it replaces the -sip-group path rather than layering onto it. It does
+	// NOT touch panel (b): the DIP's meaningful decomposition is the DECAY CHANNEL
+	// (Auger / ICD / ETMD), not the irrep, and colouring (b) by symmetry would both
+	// discard that and collide with panel (c)'s mechanism split.
+	var aLines []specLine
+	var aOrder []string
+	if p.panelSym {
+		if len(sipSpecs) > 0 {
+			fmt.Fprintln(os.Stderr, "plotspec: -panel-sym overrides -sip-group for panel (a)")
+		}
+		aLines, aOrder = symmetryChannels(sipSpec.Lines, irrepNames)
+	} else {
+		aLines, aOrder = groupSIPByGroup(sipSpec.Lines, groupOrder, moToLabel, symToLabel)
+	}
+	// Panel (a)'s groups are unrelated to the decay channels, so they take the generated
+	// colours past the curated palette to avoid implying a shared meaning with (b)/(c),
+	// unless a group asked for a custom colour via -sip-group. It keeps its own legend.
 	pa, err := buildStickPanel(aLines, aOrder, abGrid,
 		ees.SigmaFromFWHM(fwhmSIP), false, 1, p.overlay, p.stickHeight, p.absolute, len(activePalette), true, sipColors)
 	if err != nil {
@@ -1154,13 +1191,20 @@ func runPanel(p panelParams) error {
 	pa.Y.Label.Text = "(a) SIP"
 	pa.HideX() // no ticks/label here so (a) and (b) share one axis with no gap
 
-	// Panel (b): DIP sticks with the decay-channel colouring. Its legend is drawn
-	// once as a shared key in the gap above (c), so this panel adds none itself.
+	// Panel (b): DIP sticks with the decay-channel colouring. Its legend is drawn once
+	// as a shared key in the gap above (c), so this panel adds none itself.
 	bOrder := channelOrder(*dipSpec)
+	if p.dipFamily {
+		var bLines []specLine
+		bLines, bOrder = familyChannels(dipSpec.Lines)
+		// Panel (c) and the shared key read their channels from this spectrum, so the
+		// single relabelling keeps (b), (c) and the key consistent.
+		dipSpec.Lines = bLines
+	}
 	// Channel→colour map shared by (b), (c) and the key: each decay family gets its
-	// canonical hue (Auger=orange, ICD=blue, ETMD=green) and a family's subchannels
-	// are distinct shades of it, so a channel keeps the same colour across panels
-	// even when (c) draws only a -fin-channels subset.
+	// canonical hue (Auger=orange, ICD=blue, ETMD=green) and a family's subchannels are
+	// distinct shades of it, so a channel keeps the same colour across panels even when
+	// (c) draws only a -fin-channels subset.
 	dipColors := dipChannelColors(bOrder)
 	pb, err := buildStickPanel(dipSpec.Lines, bOrder, abGrid,
 		ees.SigmaFromFWHM(fwhmDIP), p.spinWeight, dipRatio, p.overlay, p.stickHeight, p.absolute, 0, false, dipColors)
@@ -1172,26 +1216,56 @@ func runPanel(p panelParams) error {
 	pb.Y.Label.Text = "(b) DIP"
 
 	// Panel (c): electron-emission spectrum on its own window (-xrange-c).
+	//
+	// With a reference system (-ref-sip/-ref-dip) this panel carries the MECHANISM
+	// decomposition instead of the system's per-channel curves: the non-interacting
+	// background is drawn as two stacked bands, Auger-Meitner under ICD, with the
+	// system's own total over them. See panelRefFamilies for why that split is exact.
+	decompose := p.refSIP != "" && p.refDIP != ""
+	cAbsolute := p.absolute
+	if decompose && !cAbsolute {
+		// The system and its reference must share one absolute scale, or the background
+		// is an arbitrary multiple of the curve drawn over it and the comparison is
+		// meaningless. -mode ees-diff forces this for the same reason.
+		cAbsolute = true
+		fmt.Fprintf(os.Stderr, "plotspec: panel (c) forcing absolute intensities, "+
+			"required to put the system and its reference on one scale\n")
+	}
 	res, err := eesElectronCurve(sipSpec, dipSpec, eesCurveParams{
 		fwhm: p.fwhm, fwhmSIP: p.fwhmSIP, fwhmDIP: p.fwhmDIP, fwhmEES: p.fwhmEES,
 		finChannels: p.finChannels, points: p.points, pad: p.pad,
-		xRange: p.xRangeC, absolute: p.absolute, spinWeight: p.spinWeight,
+		xRange: p.xRangeC, absolute: cAbsolute, spinWeight: p.spinWeight,
 	})
 	if err != nil {
 		return err
 	}
 	pc := plot.New()
 	pc.X.Min, pc.X.Max = res.eLo, res.eHi
-	pc.X.Label.Text = "E (eV)"
+	// Panel (c)'s abscissa is the EMITTED ELECTRON's kinetic energy eps, not the
+	// state energy E that panels (a)/(b) share; labelling it "E" invited reading
+	// the three panels on one axis.
+	pc.X.Label.Text = "Emitted electron kinetic energy (eV)"
 	pc.Y.Label.Text = "(c) Secondary EES"
-	for _, ch := range res.order {
-		cline, err := plotter.NewLine(asXYs(res.eGrid, res.sigmas[ch]))
-		if err != nil {
+	if !decompose {
+		for _, ch := range res.order {
+			cline, err := plotter.NewLine(asXYs(res.eGrid, res.sigmas[ch]))
+			if err != nil {
+				return err
+			}
+			cline.Color = dipColors[ch]
+			cline.Width = vg.Points(1.5)
+			pc.Add(cline)
+		}
+	}
+	// Decomposition entries for the shared key, empty unless panel (c) decomposed.
+	var cOrder []string
+	var cColors map[string]color.Color
+	var cDashes map[string][]vg.Length
+	if decompose {
+		var err error
+		if cOrder, cColors, cDashes, err = addPanelDecomposition(pc, res, p, bOrder); err != nil {
 			return err
 		}
-		cline.Color = dipColors[ch]
-		cline.Width = vg.Points(1.5)
-		pc.Add(cline)
 	}
 
 	// Compose the three panels onto one canvas.
@@ -1222,7 +1296,18 @@ func runPanel(p panelParams) error {
 		Min: vg.Point{X: rect.Min.X, Y: cTop},
 		Max: vg.Point{X: rect.Max.X, Y: cTop + gap},
 	}}
-	drawChannelKey(keyCanvas, bOrder, func(ch string) color.Color { return dipColors[ch] })
+	// Panel (c) stops sharing panel (b)'s channels once it decomposes, so its own
+	// curves are appended to the same key rather than given a legend box of their own.
+	keyOrder := bOrder
+	if len(cOrder) > 0 {
+		keyOrder = append(append([]string{}, bOrder...), cOrder...)
+	}
+	drawChannelKey(keyCanvas, keyOrder, func(ch string) color.Color {
+		if c, ok := cColors[ch]; ok {
+			return c
+		}
+		return dipColors[ch]
+	}, func(ch string) []vg.Length { return cDashes[ch] })
 
 	// Bottom region: panel (c), narrower and horizontally inset.
 	cCanvas := draw.Canvas{Canvas: dc.Canvas, Rectangle: vg.Rectangle{
@@ -1237,6 +1322,198 @@ func runPanel(p panelParams) error {
 	fmt.Fprintf(os.Stderr, "plotspec: wrote %s (3-panel figure; SIP fwhm %.2g, DIP fwhm %.2g)\n",
 		p.out, fwhmSIP, fwhmDIP)
 	return nil
+}
+
+// panelRefFamilies computes the non-interacting reference's electron spectrum on the
+// same eps grid panel (c) uses, split into the two final-state families that identify
+// the decay MECHANISM:
+//
+//	one-site (both holes on the SAME monomer) -> Auger-Meitner
+//	two-site (one hole on EACH monomer)       -> ICD
+//
+// A monomer DIP calculation holds one-site states only -- it has no second site to put a
+// hole on -- so the two-site family has to be built by self-convolving the monomer SIP,
+// exactly as -ref-twosite does for -mode ees-diff.
+//
+// THE SPLIT IS EXACT, and that is why both families come out of ONE call. sigma carries
+// the per-channel final-state envelope in its numerator but N(E), the cumulative TOTAL
+// over every final state, in its denominator, and eesElectronCurve already honours that:
+// it holds sFinTot fixed while restricting the numerator channel by channel. So the two
+// curves returned here share one denominator and sum to the reference total. Computing
+// the ICD curve from the two-site lines ALONE would rebuild N(E) out of that family only
+// and overstate it badly -- the one mistake this decomposition invites.
+func panelRefFamilies(refSIP, refDIP string, twoSiteWeight, twoSiteShift float64,
+	cp eesCurveParams) (am, icd []float64, err error) {
+	sipSpec, err := readSpectrum(refSIP)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reference SIP: %w", err)
+	}
+	dipSpec, err := readSpectrum(refDIP)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reference DIP: %w", err)
+	}
+	if len(sipSpec.Lines) == 0 {
+		return nil, nil, fmt.Errorf("%s contains no lines", refSIP)
+	}
+	if len(dipSpec.Lines) == 0 {
+		return nil, nil, fmt.Errorf("%s contains no lines", refDIP)
+	}
+	if twoSiteWeight <= 0 {
+		return nil, nil, fmt.Errorf("-twosite-weight must be > 0 (got %g); the two-site family "+
+			"IS the ICD channel, so panel (c) cannot decompose without it", twoSiteWeight)
+	}
+	nOne := len(dipSpec.Lines)
+	dipSpec.Lines = append(dipSpec.Lines,
+		twoSiteLines(sipSpec.Lines, twoSiteWeight, twoSiteShift)...)
+	fmt.Fprintf(os.Stderr, "plotspec: panel (c) reference = %d one-site (Auger-Meitner) + "+
+		"%d two-site (ICD) final states, weight %.3g, shift %.3g eV\n",
+		nOne, len(dipSpec.Lines)-nOne, twoSiteWeight, twoSiteShift)
+
+	// The reference's channel names are unrelated to the system's -- ghosting one monomer
+	// breaks the C2 that relates the halves -- so -fin-channels must NOT be applied here.
+	cp.finChannels = ""
+	res, err := eesElectronCurve(sipSpec, dipSpec, cp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reference: %w", err)
+	}
+	am = make([]float64, len(res.eGrid))
+	icd = make([]float64, len(res.eGrid))
+	for _, ch := range res.order {
+		dst := am
+		if ch == twoSiteChannel {
+			dst = icd
+		}
+		for i, v := range res.sigmas[ch] {
+			dst[i] += v
+		}
+	}
+	return am, icd, nil
+}
+
+// addPanelDecomposition draws panel (c)'s mechanism decomposition: the scaled
+// non-interacting reference as two stacked bands -- Auger-Meitner, with ICD stacked on
+// top of it -- and the system's own total plus the residual drawn over them. Stacked
+// rather than overlaid because the two families are additive contributions to one
+// background, so their sum is the quantity the system should be compared against.
+func addPanelDecomposition(pc *plot.Plot, res eesResult, p panelParams, bOrder []string) (
+	[]string, map[string]color.Color, map[string][]vg.Length, error) {
+	scale := p.refScale
+	if scale == 0 {
+		scale = 2
+	}
+	if p.twoSiteShift == 0 {
+		fmt.Fprintf(os.Stderr, "plotspec: -twosite-shift is 0, the strict R->inf limit, so the "+
+			"ICD curve sits e^2/R too low (14.4/R(Angstrom) eV, R = monomer CENTROID separation)\n")
+	}
+	am, icd, err := panelRefFamilies(p.refSIP, p.refDIP, p.twoSiteWeight, p.twoSiteShift,
+		eesCurveParams{
+			fwhm: p.fwhm, fwhmSIP: p.fwhmSIP, fwhmDIP: p.fwhmDIP, fwhmEES: p.fwhmEES,
+			points: p.points, pad: p.pad, xRange: p.xRangeC,
+			absolute: true, spinWeight: p.spinWeight,
+		})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if len(am) != len(res.eGrid) {
+		return nil, nil, nil, fmt.Errorf("reference grid has %d points, system grid %d; -xrange-c must pin both",
+			len(am), len(res.eGrid))
+	}
+	sys := make([]float64, len(res.eGrid))
+	for _, ch := range res.order {
+		for i, v := range res.sigmas[ch] {
+			sys[i] += v
+		}
+	}
+	// THE ONE-SITE FAMILY IS NOT ALL AUGER. "Both holes on one monomer" covers two
+	// distinct mechanisms relative to the initially ionized monomer A: both holes on A
+	// is Auger, both holes on B is ETMD(2). That is exactly what the factor 2 on the
+	// monomer reference counts, so the one-site curve splits 1:1 between them -- exact,
+	// not an approximation, because the homodimer's A and B are congruent. Verified
+	// against the dimer's own classification (`adcgo -convert -dip -spectrum -mo` with
+	// -group A/B): Auger@A and ETMD(2) come out at 420.149 each, equal to six digits.
+	augerCurve := make([]float64, len(am))
+	etmdCurve := make([]float64, len(am))
+	icdCurve := make([]float64, len(am))
+	refTot := make([]float64, len(am))
+	diff := make([]float64, len(am))
+	for i := range am {
+		augerCurve[i] = scale * am[i] / 2
+		etmdCurve[i] = augerCurve[i]
+		icdCurve[i] = scale * icd[i]
+		refTot[i] = augerCurve[i] + etmdCurve[i] + icdCurve[i]
+		diff[i] = sys[i] - refTot[i]
+	}
+
+	// The first two labels deliberately START with "Auger" and "ICD" so channelFamily
+	// maps them onto the canonical decay hues (Auger = orange, ICD = blue) that panels
+	// (b)/(c) already use. The decomposition then reads exactly like a per-channel
+	// panel (c), because it is drawn by the same rules: one plain 1.5pt line per curve,
+	// coloured from dipChannelColors, with the key in the shared gap rather than a
+	// legend box inside the panel.
+	amLabel := "Auger (1-site, on A)"
+	etmdLabel := "ETMD(2) (1-site, on B)"
+	icdLabel := "ICD (2-site)"
+	const sysLabel, diffLabel = "system", "system - reference"
+	order := []string{amLabel, etmdLabel, icdLabel, sysLabel, diffLabel}
+	// Colour the decomposition from the SAME namespace as panel (b)'s channels, or the
+	// two compete for palette slots: an unrecognised family takes the next free slot, so
+	// colouring these alone handed "system" the same purple panel (b) had already given
+	// its own channel. Auger/ICD keep their canonical hues either way (famBase pins them).
+	// Auger/ICD keep their canonical hues (famBase pins them to the first two palette
+	// slots) alongside panel (b)'s own channels. The system and the residual are NOT
+	// decay channels, so they are drawn in black rather than taking palette slots:
+	// solid for the measured spectrum, dotted for what the reference cannot account for.
+	all := dipChannelColors(append(append([]string{}, bOrder...), amLabel, etmdLabel, icdLabel))
+	all[sysLabel] = color.RGBA{A: 255}
+	all[diffLabel] = color.RGBA{A: 255}
+	// Return ONLY the decomposition's own entries: panel (b) keeps drawing from its own
+	// dipColors, and letting these shadow it would repaint (b)'s key swatches whenever a
+	// shared family gained a member here.
+	colors := make(map[string]color.Color, len(order))
+	for _, ch := range order {
+		colors[ch] = all[ch]
+	}
+
+	dotted := []vg.Length{vg.Points(2), vg.Points(2)}
+	dashed := []vg.Length{vg.Points(6), vg.Points(3)}
+	// Auger and ETMD(2) COINCIDE exactly, so ETMD(2) is dashed: drawn solid it would sit
+	// invisibly underneath Auger and panel (c) would look as though it had no ETMD at all.
+	for _, c := range []struct {
+		name string
+		y    []float64
+		dash []vg.Length
+	}{
+		{amLabel, augerCurve, nil},
+		{etmdLabel, etmdCurve, dashed},
+		{icdLabel, icdCurve, nil},
+		{sysLabel, sys, nil},
+		{diffLabel, diff, dotted},
+	} {
+		line, err := plotter.NewLine(asXYs(res.eGrid, c.y))
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		line.Color = colors[c.name]
+		line.Width = vg.Points(1.5)
+		line.Dashes = c.dash
+		pc.Add(line)
+	}
+
+	if p.dataOut != "" {
+		// %.17g for the same reason -mode ees-diff uses it: this file is written to be
+		// re-analysed, and a float64 printed to fewer digits does not round-trip.
+		var b strings.Builder
+		fmt.Fprintf(&b, "# eps_eV\tsystem\tAuger_1site_A\tETMD2_1site_B\tICD_2site\treference_total\tdifference\n")
+		for i := range res.eGrid {
+			fmt.Fprintf(&b, "%.17g\t%.17g\t%.17g\t%.17g\t%.17g\t%.17g\t%.17g\n",
+				res.eGrid[i], sys[i], augerCurve[i], etmdCurve[i], icdCurve[i], refTot[i], diff[i])
+		}
+		if err := os.WriteFile(p.dataOut, []byte(b.String()), 0o644); err != nil {
+			return nil, nil, nil, fmt.Errorf("write %s: %w", p.dataOut, err)
+		}
+		fmt.Fprintf(os.Stderr, "plotspec: panel (c) curves written to %s\n", p.dataOut)
+	}
+	return order, colors, map[string][]vg.Length{diffLabel: dotted, etmdLabel: dashed}, nil
 }
 
 // buildStickPanel constructs a stick-spectrum plot for lines grouped by the
@@ -1326,7 +1603,8 @@ func buildStickPanel(lines []specLine, order []string, grid []float64, sigma flo
 // a many-channel key (e.g. the five decay channels of a two-neighbour system)
 // stays inside a narrow figure instead of running off the edges. colorFor maps
 // each channel to the hue both panels use, so the one key describes both.
-func drawChannelKey(c draw.Canvas, order []string, colorFor func(string) color.Color) {
+func drawChannelKey(c draw.Canvas, order []string, colorFor func(string) color.Color,
+	dashFor func(string) []vg.Length) {
 	if len(order) == 0 {
 		return
 	}
@@ -1378,6 +1656,9 @@ func drawChannelKey(c draw.Canvas, order []string, colorFor func(string) color.C
 		x := c.Min.X + (c.Max.X-c.Min.X-total)/2
 		for _, ch := range rw {
 			ls := draw.LineStyle{Color: colorFor(ch), Width: vg.Points(2)}
+			if dashFor != nil {
+				ls.Dashes = dashFor(ch)
+			}
 			c.StrokeLine2(ls, x, y, x+thumb, y)
 			x += thumb + tgap
 			c.FillText(sty, vg.Point{X: x, Y: y}, ch)
@@ -1666,6 +1947,21 @@ func groupSIPByGroup(lines []specLine, groupOrder []string, moToLabel, symToLabe
 		if !seen[label] {
 			seen[label] = true
 			order = append(order, label)
+		}
+	}
+	// Fall back to the spectrum's own channels for anything that resolved to neither a requested
+	// group nor an "MO N (sym S)" label.
+	//
+	// WITHOUT THIS, A BARE SPECTRUM DRAWS AN EMPTY PANEL AND SAYS NOTHING. sipMOSym only matches the
+	// per-orbital channel names that `adcgo -sip -spectrum` emits; `-sip -bare` emits a single
+	// "states" channel, and -convert has no grouped SIP path at all, so a bare document is what a
+	// panel figure usually has to hand. Every label then missed both maps, order came back empty, and
+	// panel (a) rendered as a flat line on a -1..1 axis — a plausible-looking figure with the data
+	// silently absent, which is the worst way for this to fail.
+	for _, l := range out {
+		if !seen[l.Channel] {
+			seen[l.Channel] = true
+			order = append(order, l.Channel)
 		}
 	}
 	return out, order
@@ -2256,6 +2552,100 @@ func channelFamily(ch string) string {
 	}
 }
 
+// familyChannels collapses each line's decay channel onto its FAMILY -- Auger, ICD or
+// ETMD -- and returns the relabelled lines with the families in canonical order.
+//
+// `adcgo -convert -dip -spectrum -mo` classifies per ATOM PAIR, so a naphthalene dimer
+// comes out with 38 channels (Auger@C1, ICD:C1->C2 ... ICD:C1->H16, ETMD(2), ETMD(3)).
+// That is the right granularity for the data and the wrong one for a figure: the shared
+// key alone grows to 38 entries and buries the panels. Collapsing to the family keeps the
+// decay mechanism, which is what the panel is read for, and keeps the key at three rows
+// in the canonical hues (Auger orange, ICD blue, ETMD green).
+func familyChannels(lines []specLine) ([]specLine, []string) {
+	rank := map[string]int{"Auger": 0, "ICD": 1, "ETMD": 2}
+	seen := map[string]bool{}
+	var fams []string
+	out := make([]specLine, len(lines))
+	for i, l := range lines {
+		fam := channelFamily(l.Channel)
+		if !seen[fam] {
+			seen[fam] = true
+			fams = append(fams, fam)
+		}
+		l.Channel = fam
+		out[i] = l
+	}
+	sort.SliceStable(fams, func(a, b int) bool {
+		ra, oka := rank[fams[a]]
+		rb, okb := rank[fams[b]]
+		if oka != okb {
+			return oka // a known family sorts before an unknown one
+		}
+		if oka && okb {
+			return ra < rb
+		}
+		return false // unknown families keep their first-appearance order
+	})
+	return out, fams
+}
+
+// symmetryChannels relabels each line's channel with the irrep it belongs to, and
+// returns the relabelled lines plus the channel order sorted by irrep.
+//
+// This is what makes -panel-sym work on a -bare spectrum. `adcgo -convert -bare` emits
+// one stick per state in a single "states" channel, so panels (a)/(b) have nothing to
+// group by -- but every line still carries its irrep, which is the physically meaningful
+// decomposition for a symmetric system.
+//
+// SPIN IS DELIBERATELY NOT PART OF THE GROUPING. A DIP spectrum is solved in four sectors
+// (singlet/triplet x A/B), but splitting the plot on spin as well doubles the colours for
+// a distinction the figure is not about, and leaves none for the decay channels in panel
+// (c). Grouping on the irrep alone means an irrep is ONE colour everywhere -- the same in
+// (a) and (b), since neither panel subdivides it -- so SIP and DIP read as the same
+// symmetry decomposition rather than two unrelated colourings. Spin still governs the
+// intensity weighting (-spin-weight), which is per line and independent of the channel.
+//
+// irrepNames optionally supplies Mulliken labels in irrep order; a spectrum JSON does
+// not record the point group, so without them the groups are named "irrep N" rather
+// than guessed at.
+func symmetryChannels(lines []specLine, irrepNames []string) ([]specLine, []string) {
+	irrepName := func(i int) string {
+		if i >= 1 && i <= len(irrepNames) {
+			return irrepNames[i-1]
+		}
+		return fmt.Sprintf("irrep %d", i)
+	}
+	seen := map[int]string{}
+	var irreps []int
+	out := make([]specLine, len(lines))
+	for i, l := range lines {
+		if _, ok := seen[l.Irrep]; !ok {
+			seen[l.Irrep] = irrepName(l.Irrep)
+			irreps = append(irreps, l.Irrep)
+		}
+		l.Channel = seen[l.Irrep]
+		out[i] = l
+	}
+	sort.Ints(irreps)
+	order := make([]string, len(irreps))
+	for i, ir := range irreps {
+		order[i] = seen[ir]
+	}
+	return out, order
+}
+
+// parseIrrepLabels splits the -irrep-labels spec into names in irrep order.
+func parseIrrepLabels(spec string) []string {
+	if strings.TrimSpace(spec) == "" {
+		return nil
+	}
+	var out []string
+	for _, t := range strings.Split(spec, ",") {
+		out = append(out, strings.TrimSpace(t))
+	}
+	return out
+}
+
 // dipChannelColors assigns each DIP decay channel a colour: the family hue
 // (Auger=orange, ICD=blue, ETMD=green — the first three palette slots) with a
 // family's subchannels rendered as distinct shades of that hue, so e.g. ICD to
@@ -2263,31 +2653,62 @@ func channelFamily(ch string) string {
 // gets the exact family colour, keeping the 2-body Auger/ICD/ETMD scheme intact.
 // Unrecognised families take further palette slots past green.
 func dipChannelColors(order []string) map[string]color.Color {
+	return channelColorsBy(order, channelFamily)
+}
+
+// familyBases assigns each family in order its base hue: Auger/ICD/ETMD are pinned to
+// the first three palette slots so a decay channel keeps its canonical colour wherever
+// it appears, and any other family takes the next free slot in order of first
+// appearance. Returns the per-family colour and the family order.
+func familyBases(order []string, family func(string) string) (map[string]color.Color, []string) {
 	famBase := map[string]int{"Auger": 0, "ICD": 1, "ETMD": 2}
-	var famOrder []string
-	members := map[string][]string{}
-	for _, ch := range order {
-		fam := channelFamily(ch)
-		if _, ok := members[fam]; !ok {
-			famOrder = append(famOrder, fam)
-		}
-		members[fam] = append(members[fam], ch)
-	}
 	next := len(famBase)
-	out := make(map[string]color.Color, len(order))
-	for _, fam := range famOrder {
+	out := map[string]color.Color{}
+	var famOrder []string
+	for _, ch := range order {
+		fam := family(ch)
+		if _, seen := out[fam]; seen {
+			continue
+		}
 		base, ok := famBase[fam]
 		if !ok {
 			base = next
 			next++
 		}
-		bc := palette(base)
+		out[fam] = palette(base)
+		famOrder = append(famOrder, fam)
+	}
+	return out, famOrder
+}
+
+// shadeByFamily spreads each family's members across tints of that family's hue, so a
+// family of one keeps the exact hue and a family of several stays recognisably one
+// colour. bases supplies the hues, normally from familyBases over a wider channel list
+// than order, which is how panels (a) and (b) agree on what colour an irrep is.
+func shadeByFamily(order []string, family func(string) string, bases map[string]color.Color) map[string]color.Color {
+	members := map[string][]string{}
+	var famOrder []string
+	for _, ch := range order {
+		fam := family(ch)
+		if _, ok := members[fam]; !ok {
+			famOrder = append(famOrder, fam)
+		}
+		members[fam] = append(members[fam], ch)
+	}
+	out := make(map[string]color.Color, len(order))
+	for _, fam := range famOrder {
 		mem := members[fam]
 		for k, ch := range mem {
-			out[ch] = shadeColor(bc, k, len(mem))
+			out[ch] = shadeColor(bases[fam], k, len(mem))
 		}
 	}
 	return out
+}
+
+// channelColorsBy is familyBases followed by shadeByFamily over the same list.
+func channelColorsBy(order []string, family func(string) string) map[string]color.Color {
+	bases, _ := familyBases(order, family)
+	return shadeByFamily(order, family, bases)
 }
 
 // shadeColor returns the k-th of n tints of base: the same hue spread across a
