@@ -79,7 +79,7 @@ type FanoDocument struct {
 	// XSize counts configurations excluded from BOTH subspaces by x: clauses. Nonzero
 	// means the width is that of the Hamiltonian restricted to Q (+) P (see -h fano).
 	XSize int `json:"x_size,omitempty"`
-	// SchemeB describes the adapted basis of a -fano-scheme b run.
+	// SchemeB describes the adapted basis of a -fano-scheme b or c run.
 	SchemeB *schemeBStats `json:"scheme_b,omitempty"`
 	QMain   int           `json:"q_main"`  // main-class configurations in Q
 	PMain   int           `json:"p_main"`  // main-class configurations in P
@@ -258,6 +258,8 @@ type fanoConfig struct {
 	// bCompactThresh is the projection eigenvalue above which a virtual direction is compact.
 	bParticle      string
 	bCompactThresh float64
+	// cOpen (-fano-c-open) is scheme C's open channel count per two-hole irrep.
+	cOpen []int
 	// phiHoles (-fano-phi-holes) selects |Phi> as the interior QMQ root heaviest on the
 	// main-class configuration with these holes; phiTol is its residual goal.
 	phiHoles []int
@@ -838,12 +840,12 @@ func runFano(d *fcidump.Data, cfg fanoConfig) error {
 	}
 	part := fano.NewPartition(parent, sel)
 	var bStats *schemeBStats
-	if cfg.scheme == "b" {
-		// Scheme B keeps the hole rule for the classes it does not rotate (1h, 3h2p) and
-		// re-sorts the 2h1p class as adapted states.
+	if cfg.scheme == "b" || cfg.scheme == "c" {
+		// Schemes B and C keep the hole rule for the classes they do not rotate (1h, 3h2p)
+		// and re-sort the 2h1p class as adapted states (B) or first-order channels (C).
 		sf, ok := fam.(sipFamily)
 		if !ok {
-			return fmt.Errorf("-fano-scheme b is implemented for -sip (orders 2, 3, 22), not %T", fam)
+			return fmt.Errorf("-fano-scheme %s is implemented for -sip (orders 2, 3, 22), not %T", cfg.scheme, fam)
 		}
 		pmx, err := fam.matrix(ch, "fano parent", parent)
 		if err != nil {
@@ -852,9 +854,13 @@ func runFano(d *fcidump.Data, cfg fanoConfig) error {
 		defer pmx.Release()
 		var st schemeBStats
 		var af adaptedFamily
-		err = stage("scheme B adapted states", func() error {
+		label, build := "scheme B adapted states", buildSchemeB
+		if cfg.scheme == "c" {
+			label, build = "scheme C channels", buildSchemeC
+		}
+		err = stage(label, func() error {
 			var err error
-			part, af, st, err = buildSchemeB(cfg, sf.parent, sf, pmx, part, eps, nocc, orbSym)
+			part, af, st, err = build(cfg, sf.parent, sf, pmx, part, eps, nocc, orbSym)
 			return err
 		})
 		if err != nil {
@@ -885,7 +891,7 @@ func runFano(d *fcidump.Data, cfg fanoConfig) error {
 	}
 	doc.Census = part.CensusString()
 	if bStats != nil {
-		doc.Scheme, doc.SchemeB = "b", bStats
+		doc.Scheme, doc.SchemeB = cfg.scheme, bStats
 	}
 	doc.Lambda = cfg.lambdaSpec
 	switch {
@@ -1373,10 +1379,10 @@ func imageAndClassify(doc *FanoDocument, cfg fanoConfig, psp fano.Space, res lan
 			doc.StieltjesBelow, doc.StieltjesAbove)
 	}
 
-	if cfg.scheme == "b" {
+	if cfg.scheme == "b" || cfg.scheme == "c" {
 		// PartialWidths routes each P row by its holes; an adapted row's holes are its
 		// parent configuration's, not the adapted state's, so the routing would be wrong.
-		doc.PartialNote = "not available for -fano-scheme b: P rows are adapted states"
+		doc.PartialNote = "not available for -fano-scheme " + cfg.scheme + ": P rows are adapted states"
 		return nil
 	}
 	if cfg.sip.moPath == "" || cfg.khci > 0 {

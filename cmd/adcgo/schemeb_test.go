@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"testing"
 
 	"gonum.org/v1/gonum/mat"
@@ -264,4 +265,149 @@ func schemeBPMPOnItsSupport(t *testing.T, particle string) {
 		t.Errorf("reduced PMP differs from the full restriction by %.3g (scale %.3g)", worst, scale)
 	}
 	t.Logf("P %d of %d rows; max |diff| %.3g of %.3g", n, ssp.Size(), worst, scale)
+}
+
+// TestSchemeCChannels: scheme C's channels, built in sip's spin functions from each 2h1p
+// row's determinant expansion, must have the spectrum of the textbook spin-adapted
+// first-order two-hole matrix (-eps_i - eps_j + J +/- K, singlet and triplet), cut at
+// every position; P must hold exactly open x virtuals per particle irrep; and the
+// rotation must be orthogonal (T^T M T has M's spectrum). Water, C1 and C2v.
+func TestSchemeCChannels(t *testing.T) {
+	d, err := fcidump.ReadFile("../../testdata/h2o_dzp.fcidump")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nocc := mp.NOcc(d)
+	eps := mp.OrbitalEnergies(d, nocc)
+	ints := integrals.New(d, nocc, nil)
+	sel, err := fano.ParseClassRule("q:0-3:1", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sym := range []bool{false, true} {
+		var orbSym []int
+		nirr := 1
+		if sym {
+			orbSym = d.OrbSym
+			nirr = slices.Max(orbSym)
+		}
+		irr := func(o int) int {
+			if orbSym == nil {
+				return 0
+			}
+			return orbSym[o] - 1
+		}
+		ref := spinAdaptedChannels(d, eps, nocc, irr, nirr)
+		ssp := sip.NewSpace(nocc, d.NORB, orbSym, 0)
+		pmx := sip.New(ssp, ints, eps, 2, backend.Gonum{})
+		base := fano.NewPartition(ssp, sel)
+		f := sipFamily{parent: ssp, ints: ints, eps: eps, cfg: sipConfig{order: 2}}
+		// Every cut position of every irrep: LastOpenEV is then each reference eigenvalue.
+		maxOpen := 0
+		for _, r := range ref {
+			maxOpen = max(maxOpen, len(r))
+		}
+		for k := 1; k <= maxOpen; k++ {
+			open := make([]int, nirr)
+			for h := range nirr {
+				open[h] = min(k, len(ref[h]))
+			}
+			cfg := fanoConfig{sip: sipConfig{order: 2}, cOpen: open}
+			part, fam, st, err := buildSchemeC(cfg, ssp, f, pmx, base, eps, nocc, orbSym)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantP := 0
+			for _, c := range st.Channels {
+				h := c.Irrep - 1
+				if c.Channels != len(ref[h]) {
+					t.Fatalf("sym %v: two-hole irrep %d has %d channels, reference %d", sym, c.Irrep, c.Channels, len(ref[h]))
+				}
+				if c.Open > 0 {
+					if got, want := c.LastOpenEV, ref[h][c.Open-1]*hartreeToEV; math.Abs(got-want) > 1e-8 {
+						t.Errorf("sym %v irrep %d channel %d: %.10f eV, reference %.10f", sym, c.Irrep, c.Open, got, want)
+					}
+				}
+			}
+			for a := range d.NORB - nocc {
+				h := irr(nocc + a) // target irrep 0: the two-hole irrep is the particle irrep
+				wantP += open[h]
+			}
+			if part.PSize() != wantP {
+				t.Errorf("sym %v open %v: P %d, want %d", sym, open, part.PSize(), wantP)
+			}
+			if k == 2 {
+				ea, _ := backend.Gonum{}.SymEig(fam.full.BuildMatrix())
+				em, _ := backend.Gonum{}.SymEig(pmx.BuildMatrix())
+				var de float64
+				for i := range ea {
+					de = math.Max(de, math.Abs(ea[i]-em[i]))
+				}
+				if de > 1e-10 {
+					t.Errorf("sym %v: T^T M T and M spectra differ by %.3g", sym, de)
+				}
+			}
+		}
+		t.Logf("sym %v: %d two-hole irreps, channels per irrep %v", sym, nirr, func() []int {
+			n := make([]int, nirr)
+			for h := range nirr {
+				n[h] = len(ref[h])
+			}
+			return n
+		}())
+	}
+}
+
+// spinAdaptedChannels is the textbook first-order two-hole spectrum per two-hole irrep,
+// singlet (i <= j: N[(ik|jl) + (il|jk)]) and triplet (i < j: (ik|jl) - (il|jk)) merged
+// and sorted, in hartree.
+func spinAdaptedChannels(d *fcidump.Data, eps []float64, nocc int, irr func(int) int, nirr int) [][]float64 {
+	out := make([][]float64, nirr)
+	for _, triplet := range []bool{false, true} {
+		for h := range nirr {
+			var pr [][2]int
+			for j := range nocc {
+				for i := range j + 1 {
+					if (triplet && i == j) || irr(i)^irr(j) != h {
+						continue
+					}
+					pr = append(pr, [2]int{i, j})
+				}
+			}
+			n := len(pr)
+			if n == 0 {
+				continue
+			}
+			M := mat.NewSymDense(n, nil)
+			for a, ij := range pr {
+				for b, kl := range pr {
+					i, j, k, l := ij[0], ij[1], kl[0], kl[1]
+					var v float64
+					if triplet {
+						v = d.TwoE(i, k, j, l) - d.TwoE(i, l, j, k)
+					} else {
+						nf := 1.0
+						if i == j {
+							nf /= math.Sqrt2
+						}
+						if k == l {
+							nf /= math.Sqrt2
+						}
+						v = nf * (d.TwoE(i, k, j, l) + d.TwoE(i, l, j, k))
+					}
+					if a == b {
+						v -= eps[i] + eps[j]
+					}
+					M.SetSym(a, b, v)
+				}
+			}
+			var es mat.EigenSym
+			es.Factorize(M, false)
+			out[h] = append(out[h], es.Values(nil)...)
+		}
+	}
+	for h := range out {
+		slices.Sort(out[h])
+	}
+	return out
 }

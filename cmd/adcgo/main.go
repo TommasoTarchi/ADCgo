@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -132,7 +133,7 @@ func main() {
 	includeZero := flag.Bool("include-zero", false, "emit the full canonical channel set per state, even at zero weight")
 	var groups groupFlag
 	flag.Var(&groups, "group", "decay-site grouping NAME=col1,col2 (repeatable; ~col makes a column passive); a bare -group prompts interactively; default each population column is its own site")
-	convert := flag.String("convert", "", "read a previously emitted solver document JSON (the default -dip/-sip output) and emit its bare stick spectrum without re-solving; needs -dip or -sip to say which kind")
+	convert := flag.String("convert", "", "read a previously emitted solver document JSON (the default -dip/-sip output) and emit its bare stick spectrum without re-solving; needs -dip or -sip to say which kind. With -format ref it instead re-emits theADCcode's state listing and takes a COMMA-SEPARATED list, routing each sector by its own contents so SIP and DIP documents combine into one listing and -dip/-sip are not needed")
 
 	adc22 := flag.String("adc22", "f", "-order 22 variant (Kolorenc & Averbukh, JCP 152, 214107 (2020), Table I): f = full, the paper's recommendation and the only variant that gets double Auger right; x = drops the second-order 1h/2h1p coupling; m = also drops the first-order 3h2p/3h2p block, leaving it diagonal. m and x are documented to overshoot decay widths by ~14% and ~24%, so they are diagnostics rather than production settings")
 	isrSel := flag.String("isr", "", "solve a GENERATED ISR secular matrix (internal/adc/isrgen) as VARIANT:SCHEME, e.g. dip:adc2x or ip:adc22f, applied matrix-free as tensor contractions on a k-hole space of one Ms sector: one sector per multiplicity (-spin both|singlet,triplet,...), each a block Lanczos from its pure-spin main-class vectors. -khci-maxclass/-khci-twoms shape the space; -solver lanczos|dense; -backend gonum|cuda. Detail: adcgo -h isr")
@@ -146,7 +147,8 @@ func main() {
 	fanoPhiGuess := flag.String("fano-phi-guess", "", "-fano-phi-holes: take as |Phi> the screened interior candidate with the largest overlap with the |Phi> in this file (as -fano-phi-save writes it), instead of the -fano-phi-branch rank: finds one charge-resonance branch again at another transfer scaling (-fano-lambda)")
 	fanoPhiSave := flag.String("fano-phi-save", "", "-fano-phi-holes: write the converged |Phi> (Q coordinates, float64) to this file, for -fano-phi-guess")
 	fanoPhiTol := flag.Float64("fano-phi-tol", 1e-10, "-fano-phi-holes: residual goal ||(QHQ - E) Phi|| in hartree; a polish that stops above it (the float64 floor) is reported in the document, not hidden")
-	fanoScheme := flag.String("fano-scheme", "a", "-fano: Q/P selection scheme. a = configurations by their holes (-fano-q/-fano-rule/-fano-qp). b = adapted intermediate states (Kolorenc & Averbukh 2020 §III B 2): the 2h1p configurations of each particle orbital are rotated onto the eigenstates of their block, and each adapted state is classified by its own two-hole character over site-localized occupied orbitals (needs -mo and -group sites covering the molecules): inner-valence -> Q, one-site -> excluded (-fano-b-onesite), two-site -> P. 1h stays Q, 3h2p follows the hole rule. -sip only")
+	fanoScheme := flag.String("fano-scheme", "a", "-fano: Q/P selection scheme. a = configurations by their holes (-fano-q/-fano-rule/-fano-qp). b = adapted intermediate states (Kolorenc & Averbukh 2020 §III B 2): the 2h1p configurations of each particle orbital are rotated onto the eigenstates of their block, and each adapted state is classified by its own two-hole character over site-localized occupied orbitals (needs -mo and -group sites covering the molecules): inner-valence -> Q, one-site -> excluded (-fano-b-onesite), two-site -> P. 1h stays Q, 3h2p follows the hole rule. -sip only. c = Fano-ADC22's channel partition: P = the lowest -fano-c-open first-order two-hole channels (eigenvectors of -(eps_k+eps_l) + <kl||mn> over canonical occupied orbitals, singlet and triplet together) of each two-hole irrep, times every virtual; every other 2h1p state and the 1h class are Q, 3h2p follows the hole rule")
+	fanoCOpen := flag.String("fano-c-open", "", "-fano-scheme c: open channel count per two-hole irrep, comma-separated in FCIDUMP irrep order (Fano-ADC22's openC2_inp)")
 	fanoBInner := flag.String("fano-b-inner", "e<-1.0", "-fano-scheme b: the inner-valence occupied orbitals (an orbital list: indices, @SITE[.k], e<X); an adapted state with at least -fano-b-cut of its two-hole weight on pairs containing one of them is bound")
 	fanoBCut := flag.Float64("fano-b-cut", 0.5, "-fano-scheme b: weight above which an adapted state counts as inner-valence or one-site")
 	fanoBParticle := flag.String("fano-b-particle", "free", "-fano-scheme b: which two-site adapted states are P. free (default) = only those whose particle is a FREE virtual (the virtuals are rotated, per irrep, into the real-atom AO span 'compact' and its complement 'free', i.e. the ghost/diffuse continuum content); a compact particle is a bound D+A* charge-transfer/excitation state and is excluded. any = every two-site state, the paper's rule. On the water dimer the bound-particle states carried ~125 meV of spurious width at Fano-CI level")
@@ -228,6 +230,16 @@ func main() {
 	// -convert post-processes an existing output file; it re-solves nothing and so
 	// needs no FCIDUMP.
 	if *convert != "" {
+		// -format ref re-emits saved documents as theADCcode's state listing. It takes a
+		// comma-separated list and routes each sector by its own contents, so SIP and DIP
+		// come out in one listing and neither -dip nor -sip is needed.
+		if *format == formatRef {
+			if err := runRefConvert(splitPaths(*convert), *psThresh, *out); err != nil {
+				fmt.Fprintln(os.Stderr, "adcgo:", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if *doDIP == *doSIP { // both set, or neither
 			fmt.Fprintln(os.Stderr, "adcgo: -convert needs exactly one of -dip or -sip")
 			os.Exit(2)
@@ -343,9 +355,22 @@ func main() {
 			return fanoConfig{}, err
 		}
 		switch *fanoScheme {
-		case "a", "b":
+		case "a", "b", "c":
 		default:
-			return fanoConfig{}, fmt.Errorf("bad -fano-scheme %q (want a or b)", *fanoScheme)
+			return fanoConfig{}, fmt.Errorf("bad -fano-scheme %q (want a, b or c)", *fanoScheme)
+		}
+		var cOpen []int
+		if *fanoScheme == "c" {
+			if *fanoCOpen == "" {
+				return fanoConfig{}, fmt.Errorf("-fano-scheme c needs -fano-c-open")
+			}
+			for _, f := range strings.Split(*fanoCOpen, ",") {
+				v, err := strconv.Atoi(strings.TrimSpace(f))
+				if err != nil || v < 0 {
+					return fanoConfig{}, fmt.Errorf("bad -fano-c-open entry %q", f)
+				}
+				cOpen = append(cOpen, v)
+			}
 		}
 		switch *fanoBParticle {
 		case "free", "any":
@@ -389,7 +414,7 @@ func main() {
 			sip: base, variant: variant, vacancy: vacancy, qOrbs: qOrbs, rule: rule,
 			vacancySpec: *fanoInit, qSpec: *fanoQ, phiSpec: *fanoPhiHoles,
 			scheme: *fanoScheme, bInner: *fanoBInner, bCut: *fanoBCut, bOneSite: *fanoBOneSite,
-			bParticle: *fanoBParticle, bCompactThresh: *fanoBCompact,
+			bParticle: *fanoBParticle, bCompactThresh: *fanoBCompact, cOpen: cOpen,
 			nth: *fanoNth, qMin: *fanoQMin, qRoots: *fanoQRoots, qSolver: *fanoQSolver,
 			qpSpec: *fanoQP, phiHoles: phiHoles, phiTol: *fanoPhiTol,
 			phiBranch: *fanoPhiBranch, phiGuess: *fanoPhiGuess, phiSave: *fanoPhiSave,
@@ -1195,6 +1220,115 @@ const (
 	formatJSON = "json"
 	formatRef  = "ref"
 )
+
+// refDoc is the subset of a solver document that theADCcode's reference listing needs. It
+// deliberately omits `pop`, the atom-resolved populations: those are the bulk of a production
+// DIP document (melanin's is 1.45 GB) and play no part in the listing, so decoding them would
+// cost gigabytes for nothing. Both component lists are present because one document is SIP and
+// another DIP, and a sector is routed by whichever it carries.
+type refDoc struct {
+	Sectors []struct {
+		Irrep  int `json:"irrep"`
+		Spin   int `json:"spin"`
+		States []struct {
+			Index     int                 `json:"index"`
+			EnergyEV  float64             `json:"energy_ev"`
+			PSPercent float64             `json:"ps_percent"`
+			Residue   float64             `json:"residue"`
+			Root      int                 `json:"root"`
+			Leading   []analyze.Leading   `json:"leading"` // DIP: two-hole configurations
+			Main      []analyze.OrbWeight `json:"main"`    // SIP: one-hole overlaps
+		} `json:"states"`
+	} `json:"sectors"`
+}
+
+// splitPaths splits a comma-separated path list, dropping empty entries.
+func splitPaths(spec string) []string {
+	var out []string
+	for _, p := range strings.Split(spec, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// runRefConvert re-emits saved solver documents in theADCcode's "Eigenvalue (eV), ps (%),
+// residue" format without re-solving, concatenating them in the order given — which is how the
+// reference's own per-symmetry files would read if catted together, and what emitRef already
+// does for a live run.
+//
+// A sector is SIP or DIP by what its states carry: `main` is the one-hole overlap list, `leading`
+// the two-hole configurations. Routing on the data rather than on a flag is what lets one command
+// combine a SIP document with a DIP one; nothing else distinguishes them at this level.
+//
+// The listing reproduces the document, so the -ps-thresh/-coeff-thresh of the ORIGINAL solve are
+// baked in: states already dropped cannot be recovered here, only by re-solving. -ps-thresh can
+// however be RAISED at this point, which is how a production listing is cut down to the states that
+// carry real intensity — a whole-band DIP is a quasi-continuum whose median pole strength is a couple
+// of percent, so most of its bulk is states no experiment resolves. Dropping them keeps each survivor
+// Root unchanged, so the gaps in the printed numbering still say which roots went, exactly as they do
+// when theADCcode's own threshold drops them.
+func runRefConvert(paths []string, psThresh float64, out string) error {
+	if len(paths) == 0 {
+		return errors.New("-convert needs at least one path")
+	}
+	var secs []refSector
+	for _, path := range paths {
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		var doc refDoc
+		// Stream it: json.Unmarshal would hold the raw bytes and the decoded tree at once.
+		err = json.NewDecoder(bufio.NewReaderSize(f, 1<<20)).Decode(&doc)
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		if len(doc.Sectors) == 0 {
+			return fmt.Errorf("%s has no sectors (is it a solver document?)", path)
+		}
+		for _, sec := range doc.Sectors {
+			isSIP := false
+			for _, st := range sec.States {
+				if len(st.Main) > 0 {
+					isSIP = true
+					break
+				}
+				if len(st.Leading) > 0 {
+					break
+				}
+			}
+			if isSIP {
+				s := analyze.SIPSector{Irrep: sec.Irrep, Spin: sec.Spin}
+				for _, st := range sec.States {
+					if st.PSPercent < psThresh {
+						continue
+					}
+					s.States = append(s.States, analyze.SIPState{
+						Index: st.Index, EnergyEV: st.EnergyEV, PSPercent: st.PSPercent,
+						Residue: st.Residue, Main: st.Main, Root: st.Root,
+					})
+				}
+				secs = append(secs, s)
+				continue
+			}
+			s := analyze.Sector{Irrep: sec.Irrep, Spin: sec.Spin}
+			for _, st := range sec.States {
+				if st.PSPercent < psThresh {
+					continue
+				}
+				s.States = append(s.States, analyze.State{
+					Index: st.Index, EnergyEV: st.EnergyEV, PSPercent: st.PSPercent,
+					Residue: st.Residue, Leading: st.Leading, Root: st.Root,
+				})
+			}
+			secs = append(secs, s)
+		}
+	}
+	return emitRef(secs, out)
+}
 
 // refSector is the shared behaviour of analyze.Sector and analyze.SIPSector: writing itself
 // as one of theADCcode's "Eigenvalue (eV), ps (%), residue" blocks.

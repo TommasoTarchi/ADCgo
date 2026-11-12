@@ -11,6 +11,7 @@ import (
 	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
+	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 )
 
@@ -49,6 +50,18 @@ type schemeBStats struct {
 	LocalizeMin     float64  `json:"site_localization_min"` // smallest kept site-projection eigenvalue
 	Sites           []string `json:"sites"`
 	InnerOrbs       []int    `json:"inner_orbitals"`
+	// Channels is -fano-scheme c's cut per two-hole irrep.
+	Channels []channelCut `json:"channels,omitempty"`
+}
+
+// channelCut is where -fano-scheme c cut one two-hole irrep's first-order channels: the
+// open count and the eigenvalues either side of the cut (eV, 0 where there is none).
+type channelCut struct {
+	Irrep       int     `json:"irrep_2h"` // 1-based, FCIDUMP order
+	Channels    int     `json:"channels"`
+	Open        int     `json:"open"`
+	LastOpenEV  float64 `json:"last_open_ev,omitempty"`
+	FirstShutEV float64 `json:"first_closed_ev,omitempty"`
 }
 
 // siteLocalize returns L (nocc x nocc, orthogonal): column k' is a site-localized
@@ -552,6 +565,39 @@ func buildSchemeB(cfg fanoConfig, ssp *sip.Space, f sipFamily, pmx fanoMatrix, b
 	return buildSchemeBWith(md, cfg, ssp, f, pmx, base, eps, nocc, orbSym)
 }
 
+// holeGroup is the 2h1p rows sharing (k, l, spin function): one row per particle of the
+// group's particle irrep g, in that irrep's virtual order.
+type holeGroup struct {
+	rows []int
+	g    int
+}
+
+// sipHoleGroups collects the 2h1p hole groups of ssp and checks that each holds every
+// virtual of its particle irrep (vlist: irrep -> relative virtual indices), which is what
+// lets row j of every group of one irrep be the same particle.
+func sipHoleGroups(ssp *sip.Space, nocc int, irrepOf func(int) int, vlist map[int][]int) ([]holeGroup, error) {
+	var groups []holeGroup
+	key := map[[3]int]int{}
+	for row := ssp.BeginSat; row < len(ssp.Configs); row++ {
+		c := ssp.Configs[row]
+		k := [3]int{c.Occ[0], c.Occ[1], c.Typ}
+		gi, ok := key[k]
+		if !ok {
+			gi = len(groups)
+			key[k] = gi
+			groups = append(groups, holeGroup{g: irrepOf(nocc + c.Vir)})
+		}
+		groups[gi].rows = append(groups[gi].rows, row)
+	}
+	for _, hg := range groups {
+		if len(hg.rows) != len(vlist[hg.g]) {
+			return nil, fmt.Errorf("fano: a 2h1p hole group has %d particles, its irrep has %d virtuals",
+				len(hg.rows), len(vlist[hg.g]))
+		}
+	}
+	return groups, nil
+}
+
 // buildSchemeBWith is buildSchemeB over an already loaded sidecar.
 func buildSchemeBWith(md *mo.Data, cfg fanoConfig, ssp *sip.Space, f sipFamily, pmx fanoMatrix,
 	base *fano.Partition, eps []float64, nocc int, orbSym []int) (*fano.Partition, adaptedFamily, schemeBStats, error) {
@@ -643,30 +689,9 @@ func buildSchemeBWith(md *mo.Data, cfg fanoConfig, ssp *sip.Space, f sipFamily, 
 			st.CompactVirtuals, norb-nocc)
 	}
 
-	// Hole groups: the 2h1p rows sharing (k, l, spin function), one row per particle of
-	// the group's particle irrep, in that irrep's virtual order.
-	type holeGroup struct {
-		rows []int
-		g    int
-	}
-	var groups []holeGroup
-	key := map[[3]int]int{}
-	for row := ssp.BeginSat; row < len(ssp.Configs); row++ {
-		c := ssp.Configs[row]
-		k := [3]int{c.Occ[0], c.Occ[1], c.Typ}
-		gi, ok := key[k]
-		if !ok {
-			gi = len(groups)
-			key[k] = gi
-			groups = append(groups, holeGroup{g: irrepOf(nocc + c.Vir)})
-		}
-		groups[gi].rows = append(groups[gi].rows, row)
-	}
-	for _, hg := range groups {
-		if len(hg.rows) != len(vlist[hg.g]) {
-			return nil, adaptedFamily{}, st, fmt.Errorf("fano: scheme B: a hole group has %d particles, "+
-				"its irrep has %d virtuals", len(hg.rows), len(vlist[hg.g]))
-		}
+	groups, err := sipHoleGroups(ssp, nocc, irrepOf, vlist)
+	if err != nil {
+		return nil, adaptedFamily{}, st, err
 	}
 
 	// The dense 2h1p/2h1p block of the parent, exactly (a restriction, scheme A's argument).
@@ -813,4 +838,256 @@ func buildSchemeBWith(md *mo.Data, cfg fanoConfig, ssp *sip.Space, f sipFamily, 
 		base.Selector())
 	part := fano.NewPartitionFromClasses(class, ssp.MainBlockSize(), holes, desc)
 	return part, adaptedFamily{parent: ssp, full: full, sf: f}, st, nil
+}
+
+// buildSchemeC is -fano-scheme c, Fano-ADC22's channel partition. A channel is an
+// eigenvector of the first-order two-hole matrix over canonical occupied orbitals,
+//
+//	K_KL,MN = -(eps_K + eps_L) delta + <KL||MN>   (spin orbitals, K < L, M < N),
+//
+// singlet and triplet alike. P is the lowest -fano-c-open[i] channels of two-hole irrep i,
+// each times every virtual; Q is every other 2h1p state, the 1h class and, as in scheme A,
+// the 3h2p rows the hole rule binds. Nothing is excluded.
+//
+// The particle is a spectator in K, so one rotation serves every particle of an irrep: it
+// is built once in the 2h1p rows of the first particle, from each row's two-hole
+// amplitude (sip.DetExpansion), which keeps it in sip's own spin functions and phases.
+// The Ne2 parity runs could use scheme B because every 2p^-2 channel was open there,
+// and a rotation inside an entirely selected span changes nothing; a partial selection
+// needs the channels themselves.
+func buildSchemeC(cfg fanoConfig, ssp *sip.Space, f sipFamily, pmx fanoMatrix, base *fano.Partition,
+	eps []float64, nocc int, orbSym []int) (*fano.Partition, adaptedFamily, schemeBStats, error) {
+
+	var st schemeBStats
+	irrepOf := func(orb int) int {
+		if orbSym == nil {
+			return 0
+		}
+		return orbSym[orb] - 1
+	}
+	vlist := map[int][]int{}
+	for a := range ssp.Norb - nocc {
+		g := irrepOf(nocc + a)
+		vlist[g] = append(vlist[g], a)
+	}
+	groups, err := sipHoleGroups(ssp, nocc, irrepOf, vlist)
+	if err != nil {
+		return nil, adaptedFamily{}, st, err
+	}
+	n := ssp.Size()
+	class := make([]fano.Class, n)
+	for row := range n {
+		switch {
+		case row < ssp.MainBlockSize(), base.QIndex(row) >= 0:
+			class[row] = fano.ClassQ
+		case base.PIndex(row) >= 0:
+			class[row] = fano.ClassP
+		default:
+			class[row] = fano.ClassX
+		}
+	}
+
+	K := firstOrderTwoHole(f, eps, nocc)
+	nso := 2 * nocc
+	pair := func(a, b int) int { return a*(2*nso-a-1)/2 + (b - a - 1) } // a < b
+
+	// The dense 2h1p block of the parent, for the rotated diagonal (the preconditioner).
+	sat := make([]int, 0, len(ssp.Configs)-ssp.BeginSat)
+	for row := ssp.BeginSat; row < len(ssp.Configs); row++ {
+		sat = append(sat, row)
+	}
+	bm := sip.New(ssp.Restrict(sat), f.ints, eps, f.cfg.order, backend.Gonum{})
+	bm.SetVariant(f.v)
+	if f.cfg.sig != nil {
+		bm.SetStaticSelfEnergy(f.cfg.sig)
+	}
+	M2 := bm.BuildMatrix()
+	bm.Release()
+	off := ssp.BeginSat
+
+	byIrrep := map[int][]int{} // particle irrep -> hole groups
+	for gi, hg := range groups {
+		byIrrep[hg.g] = append(byIrrep[hg.g], gi)
+	}
+	pIrreps := make([]int, 0, len(byIrrep))
+	for g := range byIrrep {
+		pIrreps = append(pIrreps, g)
+	}
+	slices.Sort(pIrreps)
+	var blocks []fano.AdaptedBlock
+	for _, g := range pIrreps {
+		gs := byIrrep[g]
+		ng := len(gs)
+		c0 := ssp.Configs[groups[gs[0]].rows[0]]
+		h2 := irrepOf(c0.Occ[0]) ^ irrepOf(c0.Occ[1])
+		if h2 >= len(cfg.cOpen) {
+			return nil, adaptedFamily{}, st, fmt.Errorf("-fano-c-open gives %d irreps; two-hole irrep %d "+
+				"(1-based) needs a count", len(cfg.cOpen), h2+1)
+		}
+		open := cfg.cOpen[h2]
+		if open > ng {
+			return nil, adaptedFamily{}, st, fmt.Errorf("-fano-c-open: two-hole irrep %d has %d channels, "+
+				"%d requested open", h2+1, ng, open)
+		}
+		// Two-hole amplitudes of the first particle's rows, one column per row and one
+		// matrix per particle spin orbital, then K in that basis.
+		amps := map[int]*mat.Dense{}
+		for x, gi := range gs {
+			terms, err := ssp.DetExpansion(groups[gi].rows[0])
+			if err != nil {
+				return nil, adaptedFamily{}, st, err
+			}
+			for _, t := range terms {
+				if len(t.Holes) != 2 || len(t.Parts) != 1 {
+					continue
+				}
+				X, ok := amps[t.Parts[0]]
+				if !ok {
+					X = mat.NewDense(K.SymmetricDim(), ng, nil)
+					amps[t.Parts[0]] = X
+				}
+				p := pair(t.Holes[0], t.Holes[1])
+				X.Set(p, x, X.At(p, x)+t.Coef)
+			}
+		}
+		Hg := mat.NewSymDense(ng, nil)
+		for _, X := range amps {
+			var KX, XKX mat.Dense
+			KX.Mul(K, X)
+			XKX.Mul(X.T(), &KX)
+			for x := range ng {
+				for y := x; y < ng; y++ {
+					Hg.SetSym(x, y, Hg.At(x, y)+0.5*(XKX.At(x, y)+XKX.At(y, x)))
+				}
+			}
+		}
+		var es mat.EigenSym
+		if !es.Factorize(Hg, true) {
+			return nil, adaptedFamily{}, st, fmt.Errorf("fano: scheme C: first-order two-hole matrix of "+
+				"irrep %d did not diagonalize", h2+1)
+		}
+		vals := es.Values(nil)
+		var Ud mat.Dense
+		es.VectorsTo(&Ud)
+		U := backend.NewMat(ng, ng)
+		for x := range ng {
+			for q := range ng {
+				U.Set(x, q, Ud.At(x, q))
+			}
+		}
+		cut := channelCut{Irrep: h2 + 1, Channels: ng, Open: open}
+		if open > 0 {
+			cut.LastOpenEV = vals[open-1] * hartreeToEV
+		}
+		if open < ng {
+			cut.FirstShutEV = vals[open] * hartreeToEV
+		}
+		st.Channels = append(st.Channels, cut)
+		if open > 0 && open < ng && (vals[open]-vals[open-1])*hartreeToEV < 0.05 {
+			fmt.Fprintf(os.Stderr, "adcgo: fano: WARNING scheme C: two-hole irrep %d is cut between "+
+				"channels %.3f and %.3f eV; a gap this small makes the open set ill-defined\n",
+				h2+1, cut.LastOpenEV, cut.FirstShutEV)
+		}
+
+		nv := len(groups[gs[0]].rows)
+		gBlocks := make([]fano.AdaptedBlock, nv)
+		parallel.Chunks(nv, parallel.ChunkWorkers(nv), func(_, lo, hi int) {
+			A := mat.NewDense(ng, ng, nil)
+			for j := lo; j < hi; j++ {
+				rows := make([]int, ng)
+				for x, gi := range gs {
+					rows[x] = groups[gi].rows[j]
+				}
+				for x := range ng {
+					for y := range ng {
+						A.Set(x, y, M2.At(rows[x]-off, rows[y]-off))
+					}
+				}
+				d := make([]float64, ng)
+				for q := range ng {
+					for x := range ng {
+						var s float64
+						for y := range ng {
+							s += A.At(x, y) * U.At(y, q)
+						}
+						d[q] += U.At(x, q) * s
+					}
+				}
+				gBlocks[j] = fano.AdaptedBlock{Rows: rows, U: U, Values: d}
+			}
+		})
+		for _, bl := range gBlocks {
+			for q, row := range bl.Rows {
+				if q < open {
+					class[row] = fano.ClassP
+					st.AdaptedP++
+				} else {
+					class[row] = fano.ClassQ
+					st.AdaptedQ++
+				}
+			}
+		}
+		blocks = append(blocks, gBlocks...)
+	}
+	slices.SortFunc(blocks, func(a, b fano.AdaptedBlock) int { return a.Rows[0] - b.Rows[0] })
+	st.Blocks = len(blocks)
+	for _, c := range st.Channels {
+		fmt.Fprintf(os.Stderr, "adcgo: fano: scheme C: two-hole irrep %d: %d of %d channels open "+
+			"(last open %.3f eV, first closed %.3f eV)\n", c.Irrep, c.Open, c.Channels, c.LastOpenEV, c.FirstShutEV)
+	}
+	ad, err := fano.NewAdapted(n, blocks)
+	if err != nil {
+		return nil, adaptedFamily{}, st, err
+	}
+	be := pmx.Backend()
+	dv := pmx.Diagonal(be)
+	pdiag := be.Download(dv)
+	be.Free(dv)
+	full, err := fano.NewAdaptedOperator(pmx, be, ad, pdiag)
+	if err != nil {
+		return nil, adaptedFamily{}, st, err
+	}
+	holes := func(row int) int { return len(ssp.Holes(row, nil)) }
+	desc := fmt.Sprintf("scheme C: first-order two-hole channels, open %v per two-hole irrep; adapted 2h1p "+
+		"states P %d, Q %d; 1h in Q; 3h2p by the hole rule [%s]", cfg.cOpen, st.AdaptedP, st.AdaptedQ,
+		base.Selector())
+	part := fano.NewPartitionFromClasses(class, ssp.MainBlockSize(), holes, desc)
+	return part, adaptedFamily{parent: ssp, full: full, sf: f}, st, nil
+}
+
+// firstOrderTwoHole is K_KL,MN = -(eps_K + eps_L) delta + <KL||MN> over the spin-orbital
+// hole pairs K < L of the canonical occupied orbitals (2*orbital + spin, as in
+// sip.DetTerm), packed row-major in K then L.
+func firstOrderTwoHole(f sipFamily, eps []float64, nocc int) *mat.SymDense {
+	nso := 2 * nocc
+	type hp struct{ k, l int }
+	var pairs []hp
+	for k := range nso {
+		for l := k + 1; l < nso; l++ {
+			pairs = append(pairs, hp{k, l})
+		}
+	}
+	np := len(pairs)
+	// <KL|MN> = (km|ln) when K, M and L, N share spins, else 0.
+	phys := func(K, L, M, N int) float64 {
+		if K%2 != M%2 || L%2 != N%2 {
+			return 0
+		}
+		return f.ints.Eri(K/2, M/2, L/2, N/2)
+	}
+	K := mat.NewSymDense(np, nil)
+	parallel.Chunks(np, parallel.ChunkWorkers(np), func(_, lo, hi int) {
+		for a := lo; a < hi; a++ {
+			p := pairs[a]
+			for b := a; b < np; b++ {
+				q := pairs[b]
+				v := phys(p.k, p.l, q.k, q.l) - phys(p.k, p.l, q.l, q.k)
+				if a == b {
+					v -= eps[p.k/2] + eps[p.l/2]
+				}
+				K.SetSym(a, b, v)
+			}
+		}
+	})
+	return K
 }
