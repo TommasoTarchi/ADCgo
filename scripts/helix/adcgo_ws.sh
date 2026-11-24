@@ -2,7 +2,7 @@
 # Resolve $ADCGO_WS to a real bwForCluster Helix workspace and export it.
 #
 # The workspace *name* (and the per-job subdir) come from $ADCGO_WS_NAME, so one
-# script serves every molecule (uracil1W, uracil2W, ...). The rationale:
+# script serves every molecule. The rationale:
 #
 # WHY THIS EXISTS: scratch/work roots on Helix are provisioned by the workspace
 # tools (ws_allocate), NOT by mkdir -- /gpfs/bwfor/{scratch,work}/... is
@@ -11,7 +11,7 @@
 # /gpfs/bwfor/work/ws/<user>-<name> and expire, so the path is discovered at run
 # time, never hard-coded.
 #
-# Sourced by uracil_dump.sbatch / uracil_dip.sbatch / submit_uracil.sh. After
+# Sourced by the per-system dump / solve jobs. After
 # sourcing, $ADCGO_WS points at an existing, writable workspace subdir.
 #
 # Overridable env:

@@ -482,7 +482,7 @@ func TestRestrictIsSubBlock(t *testing.T) {
 // σ-build, the term that is ~96.6% of DIP solver wall time.
 //
 // WHY THIS EXISTS. Until now the only per-mat-vec timing signal was a cluster job (job 14015067,
-// scripts/gpu/uracil2W_mgpu_timing.sbatch), i.e. hours of queue per data point. That job measured the
+// a cluster timing job), i.e. hours of queue per data point. That job measured the
 // satellite apply at 0.196 TFLOP/s per H200 = 0.58% of fp64 vector peak — even after the
 // per-device NVLink rewrite that was itself 12.6× faster than its predecessor. The contraction
 // work planned on the back of that number (docs/sigma_build_contractions.md) needs a signal that
@@ -541,7 +541,7 @@ func benchSector(b *testing.B) (*Matrix, int, uint64) {
 }
 
 // BenchmarkSatelliteApply times the matrix-free satellite apply at several panel widths. b=435
-// matches the sector width of the cluster measurement (uracil2W_dz main=435); b=64 matches
+// matches the sector width of the cluster measurement (system B (DZ), main=435); b=64 matches
 // SatChunkCols, the per-device gather chunk. Report is GFLOP/s via the 2·nnz·b model.
 func BenchmarkSatelliteApply(bb *testing.B) {
 	for _, cols := range []int{1, 64, 435} {

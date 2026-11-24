@@ -176,7 +176,7 @@ func TestPolishRefusesStateSwap(t *testing.T) {
 }
 
 // TestPolishStopsOnFailedSolve: when MINRES cannot solve the shifted system within its cap
-// (the He5 production point: 800 steps left relative residuals of 0.2-0.6), an inverse-
+// (the production point: 800 steps left relative residuals of 0.2-0.6), an inverse-
 // iteration step on that solution is noise. The polish must stop at the first failed solve,
 // keep the best pair it had, and say it did not converge, instead of spending its whole
 // step budget on garbage directions.
@@ -210,7 +210,7 @@ func TestPolishStopsOnFailedSolve(t *testing.T) {
 // TestJacobiDavidsonRefinedKeepsTarget: the refined Ritz vector minimizes ||(A - theta) V y||
 // at the selected Ritz value, which is blind to the target. With a poorly converged target
 // and an accurately converged neighbour in the space, the neighbour has the smaller residual
-// at theta and the refined vector jumps to it (the He5 production run lost its target for
+// at theta and the refined vector jumps to it (the production run lost its target for
 // 25 iterations this way, weight 0.29 -> 0.000). JD must keep a vector that still carries
 // the target, and from the same start converge to the targeted eigenpair.
 func TestJacobiDavidsonRefinedKeepsTarget(t *testing.T) {

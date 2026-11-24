@@ -17,12 +17,12 @@ package fano
 //  3. Jacobi-Davidson again on the winner only, from its vector and its neighbours in the
 //     final search space, down to the hand-over residual (1e-6), FOLLOWING the winner's
 //     screened vector by overlap: selecting by target weight there pulled a non-heaviest
-//     branch (He5, 160.38 eV, weight 0.29) onto the heaviest one (0.34) its neighbours
+//     branch (production system, 160.38 eV, weight 0.29) onto the heaviest one (0.34) its neighbours
 //     carried, and 22 h converged the wrong state;
 //  4. lanczos.PolishInverse, shifted inverse iteration to the goal, with an overlap guard
 //     against landing on a neighbour.
 // Inverse iteration is handed only a vector JD has taken to 1e-6: from 1e-3 inside a dense
-// manifold (the He5 production Q, 1e6 rows, three states within 0.1 eV) MINRES could not
+// manifold (the production Q space, 1e6 rows, three states within 0.1 eV) MINRES could not
 // solve the shifted system in 800 steps, every step was noise, and polishing two candidates
 // that way took most of a 53 h solve without lowering the residual. The losing candidates
 // are reported at their screening residual and never polished.
@@ -74,7 +74,7 @@ type InteriorOptions struct {
 	// the largest overlap with it, so a branch converged at one transfer scaling is found
 	// again at another. The candidates still come from the dense start and are screened by
 	// target weight: following the guess itself through JD from lambda = (1,1) to (0,0)
-	// landed on a state with NO target weight (He5, overlap 0.46), because the guess's
+	// landed on a state with NO target weight (production system, overlap 0.46), because the guess's
 	// shape changes too much between the two operators.
 	Guess []float64
 	// JD and Polish tune the two stages; Targets and Diag are filled in here.

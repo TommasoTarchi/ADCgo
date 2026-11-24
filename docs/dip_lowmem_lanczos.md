@@ -167,7 +167,7 @@ for both eigenvalues and the top/bottom partial-vector slices
 
 ## Parallelizing the band reduction
 
-The band→tridiagonal reduction plus QL sweep is one call that at the melanin DIP shape
+The band→tridiagonal reduction plus QL sweep is one call that at the production DIP shape
 (`dim` 308000, half-bandwidth 3079) is ~10^15 element updates — **~23 days on one core**.
 That is what job 14834817 was doing for 2 d 15 h after its last block line: one core busy,
 all eight H200s idle. It is CPU-only and stays that way — cuSOLVER has no band or
@@ -217,7 +217,7 @@ in that run, whereas at production's `dim/band` = 100 a chase carries ~1.2e6 upd
 reproduces production's chase length *and* its bandwidth without also reproducing its cost, so that
 one can only be settled by a production run with `-eig-workers 16`.
 
-At 3.32×, expect the melanin DIP reduction to be **~4 days** rather than the ~23 it was, against a
+At 3.32×, expect the production DIP reduction to be **~4 days** rather than the ~23 it was, against a
 120 h walltime — it fits a resumed generation, with roughly a day of margin and no checkpoint inside
 the stage. `Options.EigenProgress` is what makes that margin observable.
 

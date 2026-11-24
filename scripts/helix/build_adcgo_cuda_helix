@@ -36,7 +36,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
 # OUT lets a candidate build land somewhere other than $root/adcgo-cuda. That default path is what
-# every queued melanin/naph2 generation resolves when ADCGO is unset, so overwriting it hands a
+# every queued production generation resolves when ADCGO is unset, so overwriting it hands a
 # brand-new binary to a chain that is mid-solve, under a checkpoint written by the old one. Build to
 # a dated snapshot, smoke it (scripts/gpu/cuda_smoke.sbatch, which has the matching ADCGO override),
 # and only then point a chain at it.

@@ -1,4 +1,4 @@
-# H200 optimization plan — SIP-ADC(3) / DIP-ADC(2) at production and uracil scale
+# H200 optimization plan — SIP-ADC(3) / DIP-ADC(2) at production and mid-size scale
 
 **Status:** plan, 2026-07-23. Supersedes/operationalizes [`gpu_perf_backlog.md`](gpu_perf_backlog.md)
 into ordered, verifiable work. Companions: [`dip_operator_memory.md`](dip_operator_memory.md),

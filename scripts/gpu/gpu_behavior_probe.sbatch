@@ -37,7 +37,7 @@ export LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
 export CGO_CFLAGS="-I$CUDA_HOME/include"
 export CGO_LDFLAGS="-L$CUDA_HOME/lib64 -lcudart -lcublas -lcusolver"
 export PATH=/home/hd/hd_hd/hd_hh323/opt/go/bin:$PATH
-FC=/gpfs/bwfor/work/ws/hd_hh323-uracil2W_dz/adcgo/uracil2W_dz/uracil2W_dz.fcidump
+FC="${FC:?set FC=/path/to/system.fcidump}"
 fail=0
 hdr() { echo; echo "################ $* ################"; }
 

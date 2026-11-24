@@ -1,5 +1,5 @@
 #!/bin/bash
-# Production-BAND measurement of the Mode B banded eigensolve: band = 3079, the melanin DIP
+# Production-BAND measurement of the Mode B banded eigensolve: band = 3079, the production DIP
 # half-bandwidth, at a dim small enough to finish in a job.
 #
 # This is the only measurement that reproduces the regime that matters. Tier 1 ({3712,37}) has

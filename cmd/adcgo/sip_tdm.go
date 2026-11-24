@@ -95,7 +95,7 @@ func solveSIPSpace(ch *chooser, label string, sp *sip.Space, ints *integrals.Sto
 		}
 	}
 	// Same trigger as the DIP twin (dipLanczosOpts), and for the same reason, which this path
-	// learned the hard way: production job 14717237 ran a full 200-block melanin solve in 11 h
+	// learned the hard way: production job 14717237 ran a full 200-block solve in 11 h
 	// and printed not one line between "entering the solver" and the final JSON, so whether it
 	// had reached its block budget could only be established afterwards by matching Slurm's
 	// recorded 4.9 TB of checkpoint writes against saveKrylov's per-block size.

@@ -63,11 +63,11 @@ echo; echo "#### 2. one DIP -mgpu block under ADCGO_CUDA_STRICT=1 (remote-band p
 # located at all — the one thing the run existed to find. Same shape as step 1.
 echo "binary=$ADCGO"
 # The input is a VARIABLE with an existence check, because it used to be a hardcoded path into
-# ws/hd_hh323-uracil2W_dz — a workspace that has since expired. The run then failed with
+# a per-system workspace — a workspace that has since expired. The run then failed with
 # "no such file or directory" and the smoke reported CUDA SMOKE: FAIL, i.e. a missing input was
 # indistinguishable from a GPU regression (job 15194656: all 38 stage-1 tests passed and the FAIL
 # was purely the dead path). Workspaces expire by design, so this check is permanent, not a patch.
-SMOKE_FCIDUMP="${SMOKE_FCIDUMP:-/gpfs/bwfor/work/ws/hd_hh323-uracil1W/adcgo/uracil1W/uracil1W.fcidump}"
+SMOKE_FCIDUMP="${SMOKE_FCIDUMP:-}"
 if [ ! -f "$SMOKE_FCIDUMP" ]; then
     echo "SKIP: no FCIDUMP at $SMOKE_FCIDUMP (expired workspace?). Set SMOKE_FCIDUMP to an existing"
     echo "      one — ws_list, then <ws>/adcgo/<sys>/<sys>.fcidump. This is NOT a code failure, so"

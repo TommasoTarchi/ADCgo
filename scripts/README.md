@@ -23,13 +23,10 @@ both systems; the monomer must be a **counterpoise** fragment (partner ghosted) 
 carries basis-set superposition error instead of physics.
 
 ```sh
-# 1. integrals: dimer (exists) + counterpoise monomer
-SYS=naph2 DECK=naph2_cp_mono.in sbatch scripts/dump_melanin.sbatch
-
-# 2. whole-band solves. PREFIX picks the file set, SYS the workspace, so the fragment
-#    lives beside its dimer. EIG_B2/EIG_DEVICE are the eigensolve accelerations.
-SYS=naph2 PREFIX=naph2_cp_mono EIG_B2=128 EIG_DEVICE=1 sbatch scripts/melanin_dip_mgpu.sbatch
-SYS=naph2 PREFIX=naph2_cp_mono sbatch scripts/melanin_sip.sbatch
+# 1. integrals: dimer + counterpoise monomer (the monomer deck ghosts the partner:
+#    `&geometry ghost <atoms>`), each dumped with scripts/fcidump/dump_fcidump.py
+# 2. whole-band DIP (-solver lanczos-lowmem -lowmem-block 0, optionally -eig-b2 128
+#    -eig-device) and SIP for the monomer, with the same flags as the dimer
 
 # 3. solver documents -> stick spectra
 adcgo -convert naph2.dip.json -dip -bare -out naph2.dip.spec.json      # and .sip
@@ -127,12 +124,11 @@ orbital without the GTOs. `--molden` writes a Molden file from the same MOs the 
 from:
 
 ```sh
-python scripts/fcidump/dump_fcidump.py --input examples/melanin/melanin.in --molden melanin.molden
+python scripts/fcidump/dump_fcidump.py --input sys.in --molden sys.molden
 ```
 
 - **Orbital numbering matches ADCgo's**, because both count the ACTIVE space: `<55|` in a state
-  listing is MO 55 in the viewer, no offset. For melanin the active space is 222 MOs with 110
-  electrons, so MO 55 is the HOMO — and the first SIP state's leading term is indeed `<55|`.
+  listing is MO 55 in the viewer, no offset.
 - **Orbital energies are not in the sidecar**, so they are written as zeros. Viewers use them only
   for labelling and sorting; isosurfaces are unaffected.
 - To write one from an EXISTING sidecar without re-running SCF, rebuild the Mole from the same deck

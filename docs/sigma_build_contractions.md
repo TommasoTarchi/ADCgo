@@ -117,9 +117,9 @@ Separate the two questions, because most of the win is not cuTENSOR's:
 So: do not adopt cuTENSOR *in order to* get faster. Reformulate as contractions first; adopt
 cuTENSOR only if permutation overhead then shows up in a profile.
 
-## MEASURED (2026-07-25) — the contraction path is SLOWER than per-scalar for uracil2W
+## MEASURED (2026-07-25) — the contraction path is SLOWER than per-scalar for system B
 
-> **A direct A/B on 4×H200 contradicts the premise below.** Job `14040958`, uracil2W_dz singlet,
+> **A direct A/B on 4×H200 contradicts the premise below.** Job `14040958`, system B (DZ) singlet,
 > same sector as the gate measurement, comparing the two device paths end to end:
 >
 > | path | wall | apply | note |
@@ -131,7 +131,7 @@ cuTENSOR only if permutation overhead then shows up in a profile.
 > GEMM densifies and *materializes* the block-sparse operator (hundreds of GB of writes, then reads
 > it back), whereas the per-scalar kernel recomputes each element in registers and never
 > materializes. For a memory-bound apply the materialization traffic dwarfs the recompute it
-> replaces, and at uracil2W's panel width (b=435) the GEMM's b-fold reuse does not amortize it.
+> replaces, and at system B's panel width (b=435) the GEMM's b-fold reuse does not amortize it.
 > Bounded chunking (JIIFillBudgetElems) is what lets it *fit* at all — the unchunked fill OOM'd at
 > 424 GB (job 14026481) — but chunking per column-chunk also adds refill cost.
 >
@@ -143,7 +143,7 @@ cuTENSOR only if permutation overhead then shows up in a profile.
 
 ## MEASURED (2026-07-23) — the gate is cleared
 
-Job `14015067`, uracil2W_dz singlet, 4×H200, per-device NVLink path (i.e. *after* the 12.6× win):
+Job `14015067`, system B (DZ) singlet, 4×H200, per-device NVLink path (i.e. *after* the 12.6× win):
 
 | | |
 |---|---|
@@ -219,7 +219,7 @@ device kernel) are what would move the production number.
 **Do not scope a σ-build rewrite until the current kernel's efficiency is measured.** The whole
 case rests on the "~2–5% of peak" assumption above, which nobody has checked.
 
-Job `14015067` (`scripts/gpu/uracil2W_mgpu_timing.sbatch`) produces the first real per-mat-vec time for
+Job `14015067` (a cluster timing job) produces the first real per-mat-vec time for
 the satellite apply. Convert it to a fraction of peak, then:
 
 - **≳20% of peak** — a contraction rewrite buys maybe 3×, and is probably not worth losing

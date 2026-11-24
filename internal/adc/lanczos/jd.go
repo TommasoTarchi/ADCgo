@@ -27,7 +27,7 @@ package lanczos
 //     space grows.
 //     The refined vector is blind to the target, though: with a poorly converged target
 //     and an accurately converged neighbour in V, the neighbour has the smaller residual at
-//     theta and the refined vector jumps to it (on a 1e6-row He5 Q space the target weight
+//     theta and the refined vector jumps to it (on a 1e6-row production Q space the target weight
 //     went 0.29 -> 0.000 for 25 iterations). When the refined vector keeps less than half
 //     the selected Ritz vector's target weight, the Ritz vector is used instead.
 //     The correction equation's MINRES budget doubles (up to InnerMax) whenever the outer
@@ -37,7 +37,7 @@ package lanczos
 //     singular to working precision and stalls, the 1e-6 offset keeps it solvable. An
 //     overlap guard refuses a polish that lands on a different state. A step whose MINRES
 //     solve stops above BailRel is noise, not an inverse-iteration step: the polish stops
-//     there and keeps the best pair (on the He5 point, 16 such steps of 800 applies each
+//     there and keeps the best pair (on the production point, 16 such steps of 800 applies each
 //     were most of a 53 h solve and left the residual where JD had handed it over).
 //
 // The O(m n) vector work (Gram-Schmidt, Ritz combinations, projections) is split over

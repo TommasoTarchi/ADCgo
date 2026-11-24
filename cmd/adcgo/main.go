@@ -652,7 +652,7 @@ type Document struct {
 // deleted the moment it completes (removeLowMemCheckpoint, removeBandEigCheckpoint — both on the
 // normal completion path, by design, so a rerun does not resume a finished computation). The
 // combination means a failure in a LATER sector discards every earlier sector's result and leaves no
-// restart point for it. melanin job 15195647 lost a finished whole-band eigensolve (15h58m at
+// restart point for it. Production job 15195647 lost a finished whole-band eigensolve (15h58m at
 // dim 307998) plus ~43 h of apply exactly that way, to a GPU OOM in the next sector.
 //
 // The sidecar is a plain one-sector Document carrying the same .s<spin>.i<irrep> suffix the
@@ -742,7 +742,7 @@ func dipLanczosOpts(cfg dipConfig, spin dip.Spin, targetSym int) lanczos.Options
 
 // progressReporter builds the per-block Progress callback both solve families install. It
 // prints one line per block to stderr: the cumulative phase times first — the DIP line's
-// original fields, in their original order, so scripts/helix/uracil2W_dip_measure.sbatch's
+// original fields, in their original order, so a
 // `grep -c "^progress dip"` and anything else reading them still match — then this block's
 // own deltas.
 //
@@ -760,7 +760,7 @@ func dipLanczosOpts(cfg dipConfig, spin dip.Spin, targetSym int) lanczos.Options
 // meaningful rather than decorative.
 //
 // Without it the run goes silent between its last block line and its results. That is what made
-// melanin DIP job 14834817 unreadable: it had in fact finished all 200 blocks and was grinding
+// production DIP job 14834817 unreadable: it had in fact finished all 200 blocks and was grinding
 // through the reduction, but nothing distinguished that from a hang.
 func eigenProgressReporter(prefix string) func(col, cols int, elapsed time.Duration) {
 	return func(col, cols int, elapsed time.Duration) {
@@ -1223,7 +1223,7 @@ const (
 
 // refDoc is the subset of a solver document that theADCcode's reference listing needs. It
 // deliberately omits `pop`, the atom-resolved populations: those are the bulk of a production
-// DIP document (melanin's is 1.45 GB) and play no part in the listing, so decoding them would
+// DIP document (1.45 GB at production scale) and play no part in the listing, so decoding them would
 // cost gigabytes for nothing. Both component lists are present because one document is SIP and
 // another DIP, and a sector is routed by whichever it carries.
 type refDoc struct {

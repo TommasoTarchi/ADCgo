@@ -49,8 +49,8 @@ bin/ADCanalysis -in examples/h2o -init-atom O -out h2o.dip.json
 bin/plotspec -in h2o.dip.json -out h2o.png -fwhm 1.2
 
 # Single ionization: per-orbital spectrum, no decay-site machinery.
-bin/ADCanalysis -mode sip -in runs/UW1_O2 -out UW1_O2.sip.json
-bin/plotspec -in UW1_O2.sip.json -out UW1_O2.png -total "SIP" -xrange 8-40
+bin/ADCanalysis -mode sip -in runs/W1_siteA -out W1_siteA.sip.json
+bin/plotspec -in W1_siteA.sip.json -out W1_siteA.png -total "SIP" -xrange 8-40
 ```
 
 ---
@@ -213,7 +213,7 @@ and title wording).
 {
   "meta": {
     "kind": "sip",
-    "molecule": "uracil(H2O)",
+    "molecule": "H2O",
     "basis": "DZP",
     "point_group": "C1",
     "initial_ionization": { "atom": "O", "orbital": "1s" },
@@ -488,8 +488,8 @@ The manifest is a JSON object mapping a run name to its metadata:
 
 ```json
 {
-  "UW1_O2": { "n_waters": 1, "relaxed_energy": -490.772648382 },
-  "UW1_O4": { "n_waters": 1, "relaxed_energy": -490.770055092 }
+  "W1_siteA": { "n_waters": 1, "relaxed_energy": -152.104311207 },
+  "W1_siteB": { "n_waters": 1, "relaxed_energy": -152.101717917 }
 }
 ```
 

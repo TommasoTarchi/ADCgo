@@ -220,7 +220,7 @@ func run() error {
 			width: *width, height: *height, dpi: *dpi,
 			refSIP: *refSIP, refDIP: *refDIP, refScale: *refScale,
 			twoSiteWeight: *twoSiteW, twoSiteShift: *twoSiteShift,
-			dataOut: *dataPath,
+			dataOut:  *dataPath,
 			panelSym: *panelSym, irrepLabels: *irrepLabels, dipFamily: *dipFamily,
 		})
 	case "spectrum":

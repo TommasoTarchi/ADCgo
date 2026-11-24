@@ -245,7 +245,7 @@ func devMalloc(n int) unsafe.Pointer {
 // ckDevAlloc reports a failed device allocation instead of returning a NULL that only faults
 // later, somewhere else. k_malloc (cuda_kernels.go) swallows cudaMalloc's status and returns the
 // pointer, so NULL is the only signal there is — and these are the big ones: DeviceERI uploads
-// norb⁴ doubles, 16 GB at melanin's norb=212.
+// norb⁴ doubles, 16 GB at the production system's norb=212.
 func ckDevAlloc(p unsafe.Pointer, bytes int, what string) unsafe.Pointer {
 	if p == nil && bytes > 0 {
 		st := C.dev_last_error()

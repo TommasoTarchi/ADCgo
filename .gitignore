@@ -26,13 +26,7 @@ testdata/pyridine_N.*
 #   python scripts/fcidump/dump_fcidump.py --input examples/h2o_augccpvtz.in
 testdata/h2o_augccpvtz.*
 
-# uracil geometries — kept local-only for possible publication
-examples/uracil1W/zmat
-examples/uracil2W/zmat
-examples/uracil2W.zmat
 
 # run logs (SLURM job logs, solver logs)
 *.log
 
-# uracil results and inputs — local-only (64 MB result JSONs, publication data)
-*uracil*
