@@ -38,8 +38,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // bandStorage holds the projected banded matrix in the short-recurrence driver's native

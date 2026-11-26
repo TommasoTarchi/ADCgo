@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Per-sector backend selection for -backend auto.

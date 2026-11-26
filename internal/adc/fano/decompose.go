@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // ClassBlocks groups the rows of sp by excitation class, named as ClassWeights names them

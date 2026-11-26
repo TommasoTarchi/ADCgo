@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // fano_test.go — the Fano scheme A pipeline over a real ADC(2,2) matrix, as far as

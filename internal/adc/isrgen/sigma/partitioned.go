@@ -3,9 +3,9 @@ package sigma
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // partitioned.go — the σ-build on a row-partitioned multi-device backend (-mgpu).

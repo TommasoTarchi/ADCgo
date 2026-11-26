@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
@@ -17,6 +16,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/spectrum"
 	"github.com/leiaSQ/ADCgo/internal/adc/stieltjes"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 func testFCIDUMP(t *testing.T) *fcidump.Data {

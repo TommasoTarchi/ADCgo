@@ -26,8 +26,8 @@ package integrals
 import (
 	"sync/atomic"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Store wraps the FCIDUMP integrals with occ/vir + symmetry metadata.

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // packMap links rows of a khci.Space to elements of one spin-block tensor: row[i] of the

@@ -3,8 +3,8 @@ package sip
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matvec4.go — assembly of the CVS IP-ADC(4) secular matrix (1h | 2h1p | 3h2p),

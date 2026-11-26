@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/refout"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 func h2oSinglet(t *testing.T) *dip.Matrix {

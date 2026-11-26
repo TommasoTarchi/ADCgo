@@ -211,7 +211,7 @@ the reference and the machinery can change without touching it:
 | Block assembly (dense, per block) | `dip/matvec.go`, `sip/matvec*.go` | adding a new block |
 | Matrix-free apply (recompute each mat-vec) | `dip/matfree*.go`, `sip/matfree*.go` | a block too large to store; `-matfree` |
 | GPU kernels | `backend/*.cu`, `backend/cuda_kernels.go` | only for the matrix-free device path |
-| Multi-GPU | `backend/distributed.go`, `dip/matfree_dist.go` | see [backend/README](../backend/README.md) |
+| Multi-GPU | `backend/distributed.go`, `dip/matfree_dist.go` | see [docs/backend_matvec.md](../docs/backend_matvec.md) |
 
 The matrix-free and GPU paths have parity tests (`*Parity`, `*Gate`) against the assembled
 path. Change the physics in the element code, then run those tests to confirm the faster

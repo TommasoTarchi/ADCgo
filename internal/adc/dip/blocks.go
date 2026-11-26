@@ -7,9 +7,9 @@ import (
 	"gonum.org/v1/gonum/blas"
 	"gonum.org/v1/gonum/blas/blas64"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Spin-coupling coefficients from the reference (singlet.cpp:4-12).

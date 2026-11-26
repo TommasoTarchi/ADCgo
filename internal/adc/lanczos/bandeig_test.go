@@ -13,7 +13,7 @@ import (
 
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // buildBanded returns a random real-symmetric matrix of dimension dim with half-bandwidth

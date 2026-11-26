@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // particleBlocks groups the 2h1p rows of sp by particle orbital and diagonalizes each

@@ -6,7 +6,7 @@
 // WHY THIS LEVEL AND NOT THE BACKEND. The obvious place for a precision model is
 // backend.GemmMat, where the dense blocks are multiplied. That place is wrong here: the
 // satellite region of a large DIP/SIP sector is applied matrix-free (dip.op.mf, the
-// DeviceKernels / HostData paths), so it never passes through GemmMat at all. At the
+// DeviceAccess / HostData paths), so it never passes through GemmMat at all. At the
 // production DIP shape that region IS the operator — the dense blocks are 8.6 GB of a
 // 26.7 GB sector — so a backend-level model would quantize the small part and leave the
 // large part in full precision, which is worse than not modelling it. Operator.ApplyBlock
@@ -44,8 +44,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // QuantConfig is the reduced-precision apply model, parsed from ADCGO_QUANT.

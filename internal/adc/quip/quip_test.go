@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/isrgen/qip"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
+	"github.com/leiaSQ/goHPC/backend"
 	"gonum.org/v1/gonum/mat"
 )
 

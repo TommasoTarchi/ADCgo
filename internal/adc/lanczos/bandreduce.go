@@ -39,8 +39,8 @@ import (
 	"gonum.org/v1/gonum/blas/blas64"
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // bandReduceRef narrows bs from its own half-bandwidth to b2, applying the same transform to za, and

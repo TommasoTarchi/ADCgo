@@ -8,7 +8,6 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
@@ -16,6 +15,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 	"github.com/leiaSQ/ADCgo/internal/adc/spectrum"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // waterBlocks builds water's SIP ADC(2)x space and, per particle orbital, the block's

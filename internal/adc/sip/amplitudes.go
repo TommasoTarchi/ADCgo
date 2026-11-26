@@ -1,8 +1,8 @@
 package sip
 
 import (
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // The spectroscopic (transition) amplitudes: the effective one-hole overlap of a

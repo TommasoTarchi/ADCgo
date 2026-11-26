@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestSecondOrderTablesMatchDirectSums pins the W/U tables against the per-element double sums

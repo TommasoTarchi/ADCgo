@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestBandEigCheckpointResumeIsBitExact is the test that makes the reduction checkpoint worth

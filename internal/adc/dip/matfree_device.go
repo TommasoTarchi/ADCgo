@@ -3,8 +3,9 @@ package dip
 import (
 	"unsafe"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/ADCgo/internal/adc/devkern"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree_device.go — the DEVICE (CUDA) matrix-free applier for the 3h1p↔3h1p satellite region.
@@ -20,8 +21,8 @@ import (
 // -mgpu per-device path (matfree_dist.go) uploads the SAME host arrays to every device, so
 // building them once and uploading N times keeps the two paths bit-identical by construction.
 //
-// Compiles on every build (it calls the backend.DeviceKernels interface, not CUDA directly); it is
-// only reached when the backend implements DeviceKernels, i.e. the cuda backend. Parity on real
+// Compiles on every build (it calls the backend.DeviceAccess interface, not CUDA directly); it is
+// only reached when the backend implements DeviceAccess, i.e. the cuda backend. Parity on real
 // hardware is TestSatelliteMatFreeDeviceParity (matfree_cuda_test.go).
 
 // satDeviceSoA is the host-side flattening of a satScalarPlan into the flat arrays the CUDA
@@ -116,7 +117,7 @@ func (mx *Matrix) buildSatDeviceSoA(p *satScalarPlan) *satDeviceSoA {
 
 // satDeviceBufs is one device's uploaded copy of a satDeviceSoA. Pointers live until free().
 type satDeviceBufs struct {
-	dk backend.DeviceKernels
+	dk backend.DeviceAccess
 
 	rTyp, rGrp, rPart, rVir              unsafe.Pointer
 	jO0, jO1, jSt, jVoff, jNv, jVir      unsafe.Pointer
@@ -125,7 +126,7 @@ type satDeviceBufs struct {
 }
 
 // uploadSatSoA uploads the flattened plan to one device.
-func uploadSatSoA(dk backend.DeviceKernels, s *satDeviceSoA) *satDeviceBufs {
+func uploadSatSoA(dk backend.DeviceAccess, s *satDeviceSoA) *satDeviceBufs {
 	return &satDeviceBufs{
 		dk:   dk,
 		rTyp: dk.UploadInts(s.rTyp), rGrp: dk.UploadInts(s.rGrp),
@@ -135,7 +136,7 @@ func uploadSatSoA(dk backend.DeviceKernels, s *satDeviceSoA) *satDeviceBufs {
 		iO0: dk.UploadInts(s.iO0), iO1: dk.UploadInts(s.iO1), iO2: dk.UploadInts(s.iO2),
 		iSt: dk.UploadInts(s.iSt), iVoff: dk.UploadInts(s.iVoff), iNv: dk.UploadInts(s.iNv),
 		iVir: dk.UploadInts(s.iVir),
-		eri:  dk.DeviceERI(s.eri), eps: dk.UploadFloats(s.eps), osym: dk.UploadInts(s.osym),
+		eri:  dk.UploadFloats(s.eri), eps: dk.UploadFloats(s.eps), osym: dk.UploadInts(s.osym),
 	}
 }
 
@@ -153,8 +154,8 @@ func (b *satDeviceBufs) free() {
 // args assembles the launch arguments for a row band. in must be FULL HEIGHT (its rows span the
 // whole sector) because candidate columns are global; out is the panel this device writes, whose
 // rows start at global row outRowOff.
-func (b *satDeviceBufs) args(s *satDeviceSoA, in, out backend.BlockView, rowLo, rowHi, outRowOff int) backend.DipSatArgs {
-	return backend.DipSatArgs{
+func (b *satDeviceBufs) args(s *satDeviceSoA, in, out backend.BlockView, rowLo, rowHi, outRowOff int) devkern.DipSatArgs {
+	return devkern.DipSatArgs{
 		Nsat: s.nsat, Njii: s.njii, Nijk: s.nijk, B: in.Cols, LdIn: in.Ld, LdOut: out.Ld,
 		MainOff: s.main, Norb: s.norb, Parts: s.parts, Spin: s.spin,
 		RowLo: rowLo, RowHi: rowHi, OutRowOff: outRowOff,
@@ -167,13 +168,13 @@ func (b *satDeviceBufs) args(s *satDeviceSoA, in, out backend.BlockView, rowLo, 
 
 // newSatelliteMatFreeDevice builds the single-device CUDA satellite applier over dk: the whole
 // 3h1p band on one device, input and output both the full resident panels.
-func (mx *Matrix) newSatelliteMatFreeDevice(dk backend.DeviceKernels) matFreePart {
+func (mx *Matrix) newSatelliteMatFreeDevice(dk backend.DeviceAccess) matFreePart {
 	s := mx.buildSatDeviceSoA(mx.buildSatScalarPlan())
 	bufs := uploadSatSoA(dk, s)
 
 	apply := func(in, out backend.BlockView) {
 		// Whole band on one device: every 3h1p row, output panel at global row offset 0.
-		dk.DipSatApply(bufs.args(s, in, out, 0, s.nsat, 0))
+		devkern.DipSatApply(dk, bufs.args(s, in, out, 0, s.nsat, 0))
 	}
 	return matFreePart{apply: apply, release: bufs.free}
 }

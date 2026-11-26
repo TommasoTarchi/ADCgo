@@ -3,8 +3,8 @@ package sip
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matvec22.go — assembly of the ISR-ADC(2,2) secular matrix (1h | 2h1p | 3h2p),

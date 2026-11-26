@@ -8,12 +8,12 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	dippkg "github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 	"gonum.org/v1/gonum/mat"
 )
 

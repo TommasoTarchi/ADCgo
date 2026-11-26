@@ -5,8 +5,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/ADCgo/internal/adc/devkern"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree_batched.go — the jiiLKK half of the matrix-free satellite apply, routed through
@@ -402,8 +403,8 @@ func (mx *Matrix) newJIIMatFreeBatched() matFreePart {
 // block geometry plus the shared integral tensors. Only the block VALUES change per mat-vec, so
 // everything here is uploaded once.
 type jiiDeviceBufs struct {
-	dk   backend.DeviceKernels
-	args backend.DipFillJIIArgs
+	dk   backend.DeviceAccess
+	args devkern.DipFillJIIArgs
 	ptrs []unsafe.Pointer // everything to free
 }
 
@@ -417,7 +418,7 @@ func (b *jiiDeviceBufs) free() {
 // virtual-orbital lists of each group are concatenated into one flat array addressed by
 // (offset, count) per slot — the same ragged-list encoding matfree_device.go already uses for the
 // 3h2p/2h1p group virtuals.
-func (mx *Matrix) buildJIIDeviceBufs(dk backend.DeviceKernels, p *jiiBatchPlan, s *satDeviceSoA) *jiiDeviceBufs {
+func (mx *Matrix) buildJIIDeviceBufs(dk backend.DeviceAccess, p *jiiBatchPlan, s *satDeviceSoA) *jiiDeviceBufs {
 	// The one funnel for the lazily-built application order: a single-GPU plan arrives without
 	// it, an -mgpu clone arrives with its own per-device order already set.
 	p.ensureApps()
@@ -492,7 +493,7 @@ func (mx *Matrix) buildJIIDeviceBufs(dk backend.DeviceKernels, p *jiiBatchPlan, 
 	}
 
 	up := func(x []int32) unsafe.Pointer { return dk.UploadInts(x) }
-	a := backend.DipFillJIIArgs{
+	a := devkern.DipFillJIIArgs{
 		NSlot: n, Spin: s.spin, Norb: s.norb, Parts: mx.sp.Mult,
 		TotalElems: total, MaxElems: maxElems,
 		Rows: rows, Cols: cols,
@@ -521,13 +522,13 @@ func (mx *Matrix) buildJIIDeviceBufs(dk backend.DeviceKernels, p *jiiBatchPlan, 
 // uploads the integral tensors and the plan SoA, then returns an applier that per mat-vec fills
 // every satellite block on-device and issues the planned batched GEMMs.
 //
-// It replaces the per-scalar DipSatApply on a DeviceKernels backend. Both are correct; this one
+// It replaces the per-scalar DipSatApply on a DeviceAccess backend. Both are correct; this one
 // exists because the per-scalar kernel broadcasts each recomputed element across the b panel
 // columns with a scalar loop (measured 0.58% of fp64 peak), whereas materializing the block lets
 // cuBLAS read it with a tiled GEMM b times over.
-func (mx *Matrix) newSatBatchedDevice(dk backend.DeviceKernels) matFreePart {
+func (mx *Matrix) newSatBatchedDevice(dk backend.DeviceAccess) matFreePart {
 	s := mx.buildSatDeviceSoA(mx.buildSatScalarPlan())
-	eri, eps, osym := dk.DeviceERI(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
+	eri, eps, osym := dk.UploadFloats(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
 	part, _ := mx.newJIIMatFreeBatchedDevice(dk, s, eri, eps, osym)
 	inner := part.release
 	part.release = func() {
@@ -539,7 +540,7 @@ func (mx *Matrix) newSatBatchedDevice(dk backend.DeviceKernels) matFreePart {
 	return part
 }
 
-func (mx *Matrix) newJIIMatFreeBatchedDevice(dk backend.DeviceKernels, s *satDeviceSoA, eri, eps, osym unsafe.Pointer) (matFreePart, *jiiBatchPlan) {
+func (mx *Matrix) newJIIMatFreeBatchedDevice(dk backend.DeviceAccess, s *satDeviceSoA, eri, eps, osym unsafe.Pointer) (matFreePart, *jiiBatchPlan) {
 	p := mx.buildJIIBatchPlan()
 	bufs := mx.buildJIIDeviceBufs(dk, p, s)
 	bufs.args.ERI, bufs.args.Eps, bufs.args.OrbSym = eri, eps, osym
@@ -647,12 +648,12 @@ func (p *jiiBatchPlan) runBatchesRange(be backend.Backend, mats []backend.Device
 // outRowOff rebases a block's global write offset onto a row-partitioned output panel (the -mgpu
 // per-device path); single-GPU callers pass 0. Which applications run is decided at construction,
 // by which ones went into p.apps — not here.
-func (p *jiiBatchPlan) fillAndRun(dk backend.DeviceKernels, args backend.DipFillJIIArgs, be backend.Backend, in, out backend.BlockView, outRowOff int) (fill, gemm time.Duration, nchunk int, st satStats) {
+func (p *jiiBatchPlan) fillAndRun(dk backend.DeviceAccess, args devkern.DipFillJIIArgs, be backend.Backend, in, out backend.BlockView, outRowOff int) (fill, gemm time.Duration, nchunk int, st satStats) {
 	p.stats = satStats{}
 	for _, ch := range p.chunks {
 		args.SlotLo, args.SlotHi, args.ChunkElems = ch.lo, ch.hi, ch.elems
 		t0 := time.Now()
-		mats := dk.DipSatFillJII(args)
+		mats := devkern.DipSatFillJII(dk, args)
 		fill += time.Since(t0)
 		nchunk++
 		if len(mats) == 0 {

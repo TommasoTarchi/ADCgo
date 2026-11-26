@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	dippkg "github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
@@ -17,6 +16,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/matfree"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // sigma_generated_test.go (hand-written; survives regeneration): the generated σ-build

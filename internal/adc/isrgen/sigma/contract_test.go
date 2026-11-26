@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 func randTens(e *engine, rng *rand.Rand, labels []uint8, dims []int) tens {

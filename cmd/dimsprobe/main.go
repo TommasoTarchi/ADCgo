@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
@@ -26,6 +25,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 const gb = 1 << 30

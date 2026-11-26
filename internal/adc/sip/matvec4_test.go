@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // buildH2O4 builds the CVS ADC(4) matrix for one target irrep on H2O. sym<0 uses

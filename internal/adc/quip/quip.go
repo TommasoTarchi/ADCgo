@@ -42,7 +42,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/isrgen/qip"
@@ -51,6 +50,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 	"gonum.org/v1/gonum/mat"
 )
 

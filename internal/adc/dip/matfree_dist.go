@@ -8,8 +8,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/ADCgo/internal/adc/devkern"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree_dist.go — matrix-free 3h1p↔3h1p satellite apply under the row-partitioned (-mgpu)
@@ -97,7 +98,7 @@ func checkSatChunkFits(w, n int) {
 
 // gatherSlabs stages, on every partition, the full-height n×cw input slab for panel columns
 // [c0, c0+cw): device d's slab receives every partition's row band, because a satellite block's
-// candidate COLUMN can live on any partition (backend/README.md, "The slab must be full height").
+// candidate COLUMN can live on any partition (docs/backend_matvec.md, "The slab must be full height").
 //
 // The DESTINATION loop is issued concurrently. PeerCopy2D (backend/gpu_device.go) resolves both
 // pointers on the calling goroutine and then blocks on a round-trip through the *destination*
@@ -219,7 +220,7 @@ func (mx *Matrix) newSatelliteMatFreePerDevice(pd backend.PartitionedDevices) ma
 		if !active[d] {
 			return
 		}
-		dk, ok := pd.PartKernels(d)
+		dk, ok := pd.PartDevice(d)
 		if !ok {
 			panic("dip: per-device satellite apply selected without device kernels on every partition")
 		}
@@ -254,7 +255,7 @@ func (mx *Matrix) newSatelliteMatFreePerDevice(pd backend.PartitionedDevices) ma
 					Rows: rd, Cols: cw, Ld: rd,
 				}
 				args := bufs[d].args(s, inView, outView, rowLo[d], rowHi[d], bounds[d])
-				bufs[d].dk.DipSatApply(args)
+				devkern.DipSatApply(bufs[d].dk, args)
 			})
 		}
 		// Fence the outputs before the caller consumes them.
@@ -306,7 +307,7 @@ func (mx *Matrix) newSatBatchedPerDevice(pd backend.PartitionedDevices) matFreeP
 
 	type devState struct {
 		be   backend.Backend // the sub-backend that issues this device's GemmMatBatched
-		dk   backend.DeviceKernels
+		dk   backend.DeviceAccess
 		bufs *jiiDeviceBufs
 		plan *jiiBatchPlan
 		slab backend.Vector
@@ -384,13 +385,13 @@ func (mx *Matrix) newSatBatchedPerDevice(pd backend.PartitionedDevices) matFreeP
 		if !active[d] {
 			return
 		}
-		dk, ok := pd.PartKernels(d)
+		dk, ok := pd.PartDevice(d)
 		if !ok {
 			panic("dip: batched per-device satellite selected without device kernels")
 		}
 		plan := basePlan.cloneWith(appsOf[d], chunksOf[d])
 		bufs := mx.buildJIIDeviceBufs(dk, plan, s)
-		eri, eps, osym := dk.DeviceERI(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
+		eri, eps, osym := dk.UploadFloats(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
 		bufs.args.ERI, bufs.args.Eps, bufs.args.OrbSym = eri, eps, osym
 
 		st[d] = &devState{

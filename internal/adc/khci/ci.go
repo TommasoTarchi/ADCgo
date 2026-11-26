@@ -36,9 +36,9 @@ import (
 	"math/bits"
 	"sync/atomic"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // CI is H - E_HF on the rows of a Space. It satisfies lanczos.Operator,
@@ -622,9 +622,9 @@ func (ci *CI) applyHost(y, x []float64, cols, ldx, ldy int) {
 
 // hostSlices returns the in-place host data of a vector, or nil when the backend keeps
 // it elsewhere. Device backends embed Gonum and so satisfy HostData through promotion;
-// DeviceKernels is tested first for that reason (backend/README.md).
+// DeviceAccess is tested first for that reason (docs/backend_matvec.md).
 func (ci *CI) hostSlice(v backend.Vector) []float64 {
-	if _, dev := ci.be.(backend.DeviceKernels); dev {
+	if _, dev := ci.be.(backend.DeviceAccess); dev {
 		return nil
 	}
 	if hd, ok := ci.be.(backend.HostData); ok {

@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestCheckpointRoundTrip: writeCheckpoint → readCheckpoint reproduces the state exactly,

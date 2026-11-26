@@ -36,7 +36,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 const (

@@ -6,9 +6,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // OrbWeight is one one-hole main-space overlap "<i|: coeff" of a SIP state: the

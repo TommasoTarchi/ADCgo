@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // detOf turns a primitive 2h1p operator string c†_A c_K c_L into its sorted

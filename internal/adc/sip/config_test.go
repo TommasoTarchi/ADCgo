@@ -6,10 +6,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // H2O/cc-pVDZ (symmetry off): nocc=5, norb=24, nvir=19.

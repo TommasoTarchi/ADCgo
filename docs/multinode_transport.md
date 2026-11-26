@@ -1,7 +1,7 @@
 # multinode transport — which fabric protocol, and what changes here
 
 Decision record for extending `distBackend` / `PartitionedDevices` past one node.
-Companion to [`backend/README.md`](README.md) (how one mat-vec is partitioned) and
+Companion to [`docs/backend_matvec.md`](backend_matvec.md) (how one mat-vec is partitioned) and
 [`docs/dip_operator_memory.md`](../docs/dip_operator_memory.md) (why the satellite is matrix-free).
 
 ## Verdict
@@ -20,7 +20,7 @@ behaviour and single-node timings are unchanged. Only inter-rank pairs take the 
 
 ## This is not a bandwidth decision — comm is ~1000x below compute
 
-Production triplet, figures from `backend/README.md` and `dip/matfree_dist.go`:
+Production triplet, figures from `docs/backend_matvec.md` and `dip/matfree_dist.go`:
 
 - slab per device per chunk = `n*w*8` = 14,766,249 x 64 x 8 = **7.56 GB**
 - **26 chunks** per mat-vec (`ceil(b/w)`, b = main = 1653, w = `SatChunkCols` = 64)

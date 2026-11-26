@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestSelectInteriorHe2Plus: on the labelled He3 fixture (1.30 A chain,

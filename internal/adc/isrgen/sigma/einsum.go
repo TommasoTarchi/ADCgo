@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // view is a dense host tensor laid out column-major: the first mode is fastest, mode m

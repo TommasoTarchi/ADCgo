@@ -3,8 +3,8 @@ package sigma
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // tens is a resident tensor: backend storage plus the view metadata.

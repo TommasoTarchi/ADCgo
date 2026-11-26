@@ -3,10 +3,10 @@ package analyze
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // The RASSI-like transition-property output layer (docs/adc4_rassi_plan.md, Chunk 6):

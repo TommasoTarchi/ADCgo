@@ -37,8 +37,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Defaults, all of them the reference's hard-coded constants (stieltjes_phi1.f:60-63)

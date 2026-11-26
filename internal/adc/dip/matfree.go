@@ -1,9 +1,9 @@
 package dip
 
 import (
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/matfree"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree.go — matrix-free application of the 3h1p↔3h1p satellite region.
@@ -28,7 +28,7 @@ import (
 // parallelized over row-groups; pass 2 accumulates the transpose (out[col] += Aᵀ·in[row], off
 // -diagonal blocks only) parallelized over col-groups. No two workers ever write the same
 // output band, so no reduction and no locking are needed. Host-only for now (a CUDA
-// DeviceKernels twin is future work; see docs/dip_operator_memory.md).
+// DeviceAccess twin is future work; see docs/dip_operator_memory.md).
 
 // matFreePart is a satellite region applied by recomputing its blocks each mat-vec instead of
 // storing them. apply accumulates the region's contribution into out (both directions), and
@@ -48,7 +48,7 @@ func (mx *Matrix) SetMatFree(mode matfree.Mode, budgetBytes int64) {
 
 // matFreeSatellite reports whether the 3h1p↔3h1p satellite region is applied matrix-free for
 // this sector. It is supported on a host backend (HostData, the block applier) and on a device
-// backend that provides the DIP satellite kernel (DeviceKernels, the per-scalar CUDA applier);
+// backend that provides the DIP satellite kernel (DeviceAccess, the per-scalar CUDA applier);
 // any other backend falls back to dense. Auto compares the satellite region's dense size
 // against the budget.
 func (mx *Matrix) matFreeSatellite() bool {
@@ -69,7 +69,7 @@ func (mx *Matrix) matFreeSatellite() bool {
 // TWO PROPERTIES THAT MAKE IT EASY TO MISS, and that cost a large triplet sector a 39-minute job
 // and five days of queue time. It is REPLICATED on every device, not row-partitioned, so
 // unlike the panels it must NOT be divided by the partition count — at norb = 222 that is 18.10 GiB
-// on each of 8 GPUs, 145 GiB in aggregate. And it is allocated through DeviceERI/UploadFloats/
+// on each of 8 GPUs, 145 GiB in aggregate. And it is allocated through UploadFloats/
 // UploadInts, which use a different device allocator from backend.Alloc, so it is invisible both to
 // the pre-flight estimate and to ADCGO_DEV_ALLOC_TRACE's own accounting; it showed up only as a
 // ~19.4 GiB discrepancy between tracked and driver-reported usage.
@@ -85,13 +85,13 @@ func (mx *Matrix) MatFreeDeviceBytes() uint64 {
 }
 
 // matFreeSupported reports whether the current backend can apply the satellite region
-// matrix-free: a DeviceKernels device (per-scalar CUDA kernel), a row-partitioned backend
+// matrix-free: a DeviceAccess device (per-scalar CUDA kernel), a row-partitioned backend
 // (PanelScatterAdd, the -mgpu gather-apply-scatter path), or a HostData host (block applier).
 // The order matters: the distributed backend also satisfies HostData through its embedded
 // Gonum, so PanelScatterAdd must be tested before HostData or the host applier would call
 // HostSlice on a distributed vector.
 func (mx *Matrix) matFreeSupported() bool {
-	if _, ok := mx.be.(backend.DeviceKernels); ok {
+	if _, ok := mx.be.(backend.DeviceAccess); ok {
 		return true
 	}
 	if _, ok := mx.be.(backend.PanelScatterAdd); ok {
@@ -102,7 +102,7 @@ func (mx *Matrix) matFreeSupported() bool {
 }
 
 // newSatelliteMatFreePart builds the satellite matrix-free applier for the current backend: the
-// per-scalar CUDA kernel on a DeviceKernels device, the gather-apply-scatter path on a
+// per-scalar CUDA kernel on a DeviceAccess device, the gather-apply-scatter path on a
 // row-partitioned (PanelScatterAdd) backend, else the host block applier. Same ordering
 // rationale as matFreeSupported (distributed satisfies HostData via embedded Gonum).
 // newSatelliteMatFreeParts builds the satellite matrix-free appliers for the current backend.
@@ -117,7 +117,7 @@ func (mx *Matrix) newSatelliteMatFreeParts() []matFreePart {
 	// Single GPU: the batched contraction path (fill kernel + cuBLAS batched GEMM). The
 	// per-scalar DipSatApply applier remains available via newSatelliteMatFreePart and is what
 	// the parity tests compare against.
-	if dk, ok := mx.be.(backend.DeviceKernels); ok {
+	if dk, ok := mx.be.(backend.DeviceAccess); ok {
 		return []matFreePart{mx.newSatBatchedDevice(dk)}
 	}
 	// Multi-GPU: the batched contraction path when every partition has kernels and all pairs are
@@ -143,7 +143,7 @@ func (mx *Matrix) newSatelliteMatFreeParts() []matFreePart {
 }
 
 func (mx *Matrix) newSatelliteMatFreePart() matFreePart {
-	if dk, ok := mx.be.(backend.DeviceKernels); ok {
+	if dk, ok := mx.be.(backend.DeviceAccess); ok {
 		return mx.newSatelliteMatFreeDevice(dk)
 	}
 	// Row-partitioned: prefer the per-device on-device apply (each GPU recomputes only its own
@@ -166,7 +166,7 @@ func perDeviceSatelliteOK(pd backend.PartitionedDevices) bool {
 		return false
 	}
 	for d := range pd.NumParts() {
-		if _, ok := pd.PartKernels(d); !ok {
+		if _, ok := pd.PartDevice(d); !ok {
 			return false
 		}
 	}

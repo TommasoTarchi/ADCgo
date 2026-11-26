@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
@@ -24,6 +23,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 	"github.com/leiaSQ/ADCgo/internal/adc/spectrum"
 	"github.com/leiaSQ/ADCgo/internal/adc/stieltjes"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // fano.go — the -fano driver: an electronic decay width by the Fano/Feshbach method with

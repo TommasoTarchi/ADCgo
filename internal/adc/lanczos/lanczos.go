@@ -21,8 +21,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Timing accumulates the wall time of each phase of Solve. The phases are

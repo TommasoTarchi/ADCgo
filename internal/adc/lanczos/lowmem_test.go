@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestLowMemProbe logs the H2O sector geometry, so the Mode A/B tolerances below are chosen

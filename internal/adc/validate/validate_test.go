@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/analyze"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
@@ -25,6 +24,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/selfenergy"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 	"github.com/leiaSQ/ADCgo/internal/adc/spectrum"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Package validate cross-checks ADCgo's DIP-ADC(2) output against theADCcode's

@@ -7,8 +7,8 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // sbrDenseRef is the DENSE reference for successive band reduction: it narrows a symmetric matrix's

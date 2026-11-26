@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // coupling.go — the coupling vector g = P(M - E_Phi)|Phi>, and the start block the

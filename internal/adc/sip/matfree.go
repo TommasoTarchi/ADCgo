@@ -4,9 +4,10 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/ADCgo/internal/adc/devkern"
 	"github.com/leiaSQ/ADCgo/internal/adc/matfree"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree.go — matrix-free application of the large ADC(4) coupling blocks.
@@ -58,23 +59,23 @@ func (mx *Matrix) matFreeDecision(denseBytes int64, supported bool) bool {
 }
 
 // matFreeWert2 decides the 2h1p×3h2p coupling: supported on host (HostData) and on a
-// device backend that provides the wert2 kernel (DeviceKernels).
+// device backend that provides the wert2 kernel (DeviceAccess).
 func (mx *Matrix) matFreeWert2(denseBytes int64) bool {
 	_, host := mx.be.(backend.HostData)
-	_, dev := mx.be.(backend.DeviceKernels)
+	_, dev := mx.be.(backend.DeviceAccess)
 	return mx.matFreeDecision(denseBytes, host || dev)
 }
 
 // matFreeC22 decides the order-4 2h1p×2h1p block (c22elem4): host-only, because there is no
 // device c22elem4 kernel — a device backend must fall back to the dense block.
 //
-// The DeviceKernels test MUST come first. gpuBackend embeds Gonum (backend/gpu_device.go), so it
+// The DeviceAccess test MUST come first. gpuBackend embeds Gonum (backend/gpu_device.go), so it
 // satisfies HostData through the promoted Gonum.HostSlice even though its vectors are devVec —
 // testing HostData alone selects newC22MatFree on a CUDA backend and panics on the first
 // HostSlice(devVec). Same ordering rationale as dip/matfree.go matFreeSupported. Pinned by
 // TestMatFreeC22RejectsDeviceBackend (no GPU needed).
 func (mx *Matrix) matFreeC22(denseBytes int64) bool {
-	if _, dev := mx.be.(backend.DeviceKernels); dev {
+	if _, dev := mx.be.(backend.DeviceAccess); dev {
 		return false
 	}
 	_, host := mx.be.(backend.HostData)
@@ -87,7 +88,7 @@ func (mx *Matrix) matFreeC22(denseBytes int64) bool {
 // over both directions and parallelized over the 3h2p columns (the large,
 // contention-free side) with per-worker 2h1p partials reduced in fixed order.
 func (mx *Matrix) newWert2MatFree() matFreePart {
-	if dk, ok := mx.be.(backend.DeviceKernels); ok {
+	if dk, ok := mx.be.(backend.DeviceAccess); ok {
 		return mx.newWert2MatFreeDevice(dk)
 	}
 	sp := mx.sp
@@ -240,12 +241,12 @@ func (mx *Matrix) newC22MatFree() matFreePart {
 
 // matFreeC22O3 decides the order-3 2h1p×2h1p satellite block (satBlock): supported
 // matrix-free on the host (HostData) and on a device backend that provides the c22 kernel
-// (DeviceKernels). Unlike matFreeC22 (order 4, host-only) this has a device path, because
+// (DeviceAccess). Unlike matFreeC22 (order 4, host-only) this has a device path, because
 // the order-3 element (c22diag/c22off) is a fixed set of ERI lookups — no SUM1 — so it maps
 // to a GPU kernel (adc4_kernels.cu c22_apply).
 func (mx *Matrix) matFreeC22O3(denseBytes int64) bool {
 	_, host := mx.be.(backend.HostData)
-	_, dev := mx.be.(backend.DeviceKernels)
+	_, dev := mx.be.(backend.DeviceAccess)
 	return mx.matFreeDecision(denseBytes, host || dev)
 }
 
@@ -364,7 +365,7 @@ func (b *c22Buckets) candidates(dst []int32, k, l, vir, self int) []int32 {
 }
 
 func (mx *Matrix) newC22MatFreeO3() matFreePart {
-	if dk, ok := mx.be.(backend.DeviceKernels); ok {
+	if dk, ok := mx.be.(backend.DeviceAccess); ok {
 		return mx.newC22MatFreeO3Device(dk)
 	}
 	sp := mx.sp
@@ -465,7 +466,7 @@ func (mx *Matrix) deviceERI() []float64 {
 // holding zero dense-block VRAM. The kernel is bit-for-bit the CPU element evaluation
 // (c22diag/c22off, same lo=min(r,c) directionality); validate with the GPU parity test on
 // real hardware (TestC22MatFreeO3DeviceParity).
-func (mx *Matrix) newC22MatFreeO3Device(dk backend.DeviceKernels) matFreePart {
+func (mx *Matrix) newC22MatFreeO3Device(dk backend.DeviceAccess) matFreePart {
 	sp := mx.sp
 	main := sp.BeginSat
 	rows := sp.Configs[main:]
@@ -483,11 +484,11 @@ func (mx *Matrix) newC22MatFreeO3Device(dk backend.DeviceKernels) matFreePart {
 	eri := mx.deviceERI()
 
 	dK, dL, dVir, dTyp := dk.UploadInts(rK), dk.UploadInts(rL), dk.UploadInts(rVir), dk.UploadInts(rTyp)
-	dERI := dk.DeviceERI(eri)
+	dERI := dk.UploadFloats(eri)
 	dEps := dk.UploadFloats(mx.el.eps)
 
 	apply := func(in, out backend.BlockView) {
-		dk.C22Apply(backend.C22Args{
+		devkern.C22Apply(dk, devkern.C22Args{
 			N2: n2, B: in.Cols, LdIn: in.Ld, LdOut: out.Ld,
 			MainOff: main, Norb: norb, Nocc: nocc,
 			K: dK, L: dL, Vir: dVir, Typ: dTyp,
@@ -507,7 +508,7 @@ func (mx *Matrix) newC22MatFreeO3Device(dk backend.DeviceKernels) matFreePart {
 // mat-vec launches the recompute kernel (adc4_kernels.cu, both directions), holding zero
 // dense-block VRAM. The kernel is bit-for-bit the CPU element evaluation; validate with
 // the GPU parity test on real hardware (docs/adc4_matfree_gpu.md).
-func (mx *Matrix) newWert2MatFreeDevice(dk backend.DeviceKernels) matFreePart {
+func (mx *Matrix) newWert2MatFreeDevice(dk backend.DeviceAccess) matFreePart {
 	sp := mx.sp
 	main, off3 := sp.BeginSat, sp.Begin3h2p
 	rows, cols := sp.Configs[main:off3], sp.Sat3
@@ -540,11 +541,11 @@ func (mx *Matrix) newWert2MatFreeDevice(dk backend.DeviceKernels) matFreePart {
 	dRVir, dRK, dRL, dRTyp := dk.UploadInts(rVir), dk.UploadInts(rK), dk.UploadInts(rL), dk.UploadInts(rTyp)
 	dCI, dCJ, dCK := dk.UploadInts(cI), dk.UploadInts(cJ), dk.UploadInts(cK)
 	dCL, dCM, dCSpin := dk.UploadInts(cL), dk.UploadInts(cM), dk.UploadInts(cSpin)
-	dERI := dk.DeviceERI(eri)
-	dk.SetCoeff1(coeff1Flat)
+	dERI := dk.UploadFloats(eri)
+	devkern.SetCoeff1(dk, coeff1Flat)
 
 	apply := func(in, out backend.BlockView) {
-		dk.Wert2Apply(backend.Wert2Args{
+		devkern.Wert2Apply(dk, devkern.Wert2Args{
 			N2: n2, N3: n3, B: in.Cols, LdIn: in.Ld, LdOut: out.Ld,
 			MainOff: main, Off3: off3, Norb: norb, Nocc: nocc,
 			RVir: dRVir, RK: dRK, RL: dRL, RTyp: dRTyp,

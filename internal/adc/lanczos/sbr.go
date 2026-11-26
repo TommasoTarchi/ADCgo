@@ -41,7 +41,7 @@ import (
 	"gonum.org/v1/gonum/blas/blas64"
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // sbTol is the largest magnitude that may be dropped as "outside the band". Anything above it is a

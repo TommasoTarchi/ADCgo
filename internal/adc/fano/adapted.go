@@ -5,8 +5,8 @@ import (
 	"math"
 	"slices"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // adapted.go — scheme B, the partition over ADAPTED intermediate states (ADC22.pdf

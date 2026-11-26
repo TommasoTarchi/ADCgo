@@ -38,8 +38,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // block records one accepted Lanczos block: its global column offset, its size (after

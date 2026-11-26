@@ -6,8 +6,8 @@ import (
 	"math/bits"
 	"slices"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // spin.go — S² over the rows of a space, and the projector onto one multiplicity.

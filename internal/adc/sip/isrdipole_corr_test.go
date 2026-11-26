@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
 	"github.com/leiaSQ/ADCgo/internal/adc/selfenergy"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // The order-by-order gate on the ISR correlation corrections (isrdipole_corr.go).

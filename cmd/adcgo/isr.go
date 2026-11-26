@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	isrdip "github.com/leiaSQ/ADCgo/internal/adc/isrgen/dip"
@@ -18,6 +17,7 @@ import (
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // isr.go — -isr VARIANT:SCHEME: the spectrum of a generated ISR secular matrix

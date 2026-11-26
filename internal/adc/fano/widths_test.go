@@ -6,11 +6,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 	"github.com/leiaSQ/ADCgo/internal/adc/spectrum"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 const auToMeV = 27211.386245988

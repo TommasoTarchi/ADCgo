@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // sampleLowMemState builds a small but structurally realistic checkpoint state: three blocks with

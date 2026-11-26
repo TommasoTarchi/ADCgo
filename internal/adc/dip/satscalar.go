@@ -3,8 +3,8 @@ package dip
 import (
 	"sync/atomic"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // satscalar.go — the per-output-scalar form of the 3h1p↔3h1p satellite apply.

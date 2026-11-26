@@ -3,8 +3,8 @@ package sip
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // The Dyson amplitude of a cationic state — the overlap of the (N−1)-electron state

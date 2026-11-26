@@ -5,8 +5,8 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 func canonicalPatterns(nPart, nHole int) []string {

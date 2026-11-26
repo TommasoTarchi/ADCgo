@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/dip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestDavidsonMatchesDense is the primary correctness gate: for a tight residual

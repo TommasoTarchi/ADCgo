@@ -5,9 +5,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Matrix is the IP-ADC(n) secular matrix for one target-symmetry sector. It is

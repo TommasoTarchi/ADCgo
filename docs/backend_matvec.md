@@ -1,3 +1,5 @@
+> This describes the device backend that now lives in [goHPC](https://github.com/leiaSQ/goHPC) (`backend/` there); paths written `backend/...` below are that package.
+
 # backend — how a Lanczos block is split and applied
 
 Orientation for the compute layer: what a `Backend` is, and — the part that is hard to
@@ -14,7 +16,7 @@ extends past one node, and which fabric protocol).
 |---|---|
 | `Backend` | the BLAS-ish surface the solvers use: `Alloc/Upload/Download`, `Gemm`, `GemmMat(Batched)`, `AxpyDiag`, … Implementations: `Gonum` (host, reference), `gpuBackend` (cuda), `hip`, `distBackend`. |
 | `HostData` | optional: exposes a resident vector's backing slice. Host backends only. **`gpuBackend` embeds `Gonum`, so it satisfies this interface too** — always test `DeviceKernels` *before* `HostData`, or a device backend takes a host path and panics on `HostSlice(devVec)`. |
-| `DeviceKernels` | optional: the custom CUDA kernels (`Wert2Apply`, `C22Apply`, `DipSatApply`) plus the upload helpers they need. Implemented by the cuda backend only. |
+| `DeviceAccess` (goHPC; was `DeviceKernels`) | optional: runs the custom CUDA kernels of `internal/adc/devkern` (`Wert2Apply`, `C22Apply`, `DipSatApply`) plus the upload helpers they need. Implemented by the cuda backend only. |
 | `PeerCopier` | optional: NVLink peer access — `EnablePeerAccess`, `PeerCopy2D`, `Sync`. |
 | `PanelScatterAdd` | optional: `AddPanel` — add a full host panel into a partitioned one. Backs the host-fallback satellite path. |
 | `PartitionedDevices` | optional: reach the individual partitions (`NumParts`, `Bounds`, `PartBackend`, `PartKernels`, `PartVector`, `AllPeered`). Backs the per-device satellite path. |

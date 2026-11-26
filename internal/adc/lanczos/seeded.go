@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // SeededResult is the Jacobi matrix of the measure of v0: Alpha (diagonal) and Beta

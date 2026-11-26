@@ -4,9 +4,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // build22 makes an ADC(2,2) matrix for H2O restricted to the first norb orbitals.

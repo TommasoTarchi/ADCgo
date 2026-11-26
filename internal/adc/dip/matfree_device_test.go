@@ -7,11 +7,12 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/ADCgo/internal/adc/devkern"
 	"github.com/leiaSQ/ADCgo/internal/adc/fcidump"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/matfree"
 	"github.com/leiaSQ/ADCgo/internal/adc/mp"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // TestSatelliteMatFreeDeviceParity validates the CUDA DIP 3h1p↔3h1p satellite kernel
@@ -96,9 +97,9 @@ func TestJIIFillDeviceMatchesHost(t *testing.T) {
 	if err != nil {
 		t.Skipf("no cuda backend/device: %v", err)
 	}
-	dk, ok := be.(backend.DeviceKernels)
+	dk, ok := be.(backend.DeviceAccess)
 	if !ok {
-		t.Skip("cuda backend does not expose DeviceKernels")
+		t.Skip("cuda backend does not expose DeviceAccess")
 	}
 
 	h2oSectors(t, func(spin Spin, sym int, sp *Space, ints *integrals.Store, eps []float64, host backend.Backend) {
@@ -107,7 +108,7 @@ func TestJIIFillDeviceMatchesHost(t *testing.T) {
 		mx := New(sp, ints, eps, be)
 
 		s := mx.buildSatDeviceSoA(mx.buildSatScalarPlan())
-		dERI, dEps, dOsym := dk.DeviceERI(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
+		dERI, dEps, dOsym := dk.UploadFloats(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
 		defer func() {
 			dk.FreeDev(dERI)
 			dk.FreeDev(dEps)
@@ -134,7 +135,7 @@ func TestJIIFillDeviceMatchesHost(t *testing.T) {
 		var maxErr, scale float64
 		for _, ch := range p.chunks {
 			bufs.args.SlotLo, bufs.args.SlotHi, bufs.args.ChunkElems = ch.lo, ch.hi, ch.elems
-			mats := dk.DipSatFillJII(bufs.args)
+			mats := devkern.DipSatFillJII(dk, bufs.args)
 			if len(mats) != ch.hi-ch.lo {
 				t.Fatalf("spin=%v sym=%d: chunk [%d,%d) returned %d handles, want %d",
 					spin, sym, ch.lo, ch.hi, len(mats), ch.hi-ch.lo)
@@ -261,9 +262,9 @@ func TestJIIMatFreeBatchedDeviceParity(t *testing.T) {
 	if err != nil {
 		t.Skipf("no cuda backend/device: %v", err)
 	}
-	dk, ok := be.(backend.DeviceKernels)
+	dk, ok := be.(backend.DeviceAccess)
 	if !ok {
-		t.Skip("cuda backend does not expose DeviceKernels")
+		t.Skip("cuda backend does not expose DeviceAccess")
 	}
 	rng := rand.New(rand.NewSource(303))
 
@@ -290,7 +291,7 @@ func TestJIIMatFreeBatchedDeviceParity(t *testing.T) {
 
 		mx := New(sp, ints, eps, be)
 		s := mx.buildSatDeviceSoA(mx.buildSatScalarPlan())
-		dERI, dEps, dOsym := dk.DeviceERI(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
+		dERI, dEps, dOsym := dk.UploadFloats(s.eri), dk.UploadFloats(s.eps), dk.UploadInts(s.osym)
 		defer func() {
 			dk.FreeDev(dERI)
 			dk.FreeDev(dEps)

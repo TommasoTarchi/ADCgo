@@ -31,8 +31,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // dkey pairs a matrix-diagonal entry with the configuration index it came from, so the

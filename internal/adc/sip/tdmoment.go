@@ -1,6 +1,6 @@
 package sip
 
-import "github.com/leiaSQ/ADCgo/backend"
+import "github.com/leiaSQ/goHPC/backend"
 
 // The bound→continuum half of the decay chain (docs/adc4_rassi_plan.md, element 2):
 // the neighbour's photoionization, which ejects the ICD electron.

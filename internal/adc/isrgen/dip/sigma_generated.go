@@ -5,10 +5,10 @@ package dip
 import (
 	"fmt"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/isrgen/sigma"
 	"github.com/leiaSQ/ADCgo/internal/adc/khci"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // SigmaOrders is the highest order per block (B00 B01 B11 B02 B12 B22) the σ program

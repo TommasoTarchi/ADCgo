@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // matfree22.go — matrix-free application of the two ADC(2,2) blocks that cannot be
@@ -703,7 +703,7 @@ func (mx *Matrix) newSat3MatFree() matFreePart {
 // block. Both are host-only: there is no device kernel for c23_1/c33_01, so a CUDA
 // backend must fall back to the dense block.
 //
-// The DeviceKernels test MUST come first, for the reason matFreeC22 records — a GPU
+// The DeviceAccess test MUST come first, for the reason matFreeC22 records — a GPU
 // backend embeds Gonum and so satisfies HostData through the promoted HostSlice,
 // even though its vectors are device memory, so testing HostData alone would select
 // the host applier and panic on the first HostSlice.
@@ -712,7 +712,7 @@ func (mx *Matrix) matFreeC23(denseBytes int64) bool { return mx.matFreeHostOnly(
 func (mx *Matrix) matFreeSat3(denseBytes int64) bool { return mx.matFreeHostOnly(denseBytes) }
 
 func (mx *Matrix) matFreeHostOnly(denseBytes int64) bool {
-	if _, dev := mx.be.(backend.DeviceKernels); dev {
+	if _, dev := mx.be.(backend.DeviceAccess); dev {
 		return false
 	}
 	_, host := mx.be.(backend.HostData)

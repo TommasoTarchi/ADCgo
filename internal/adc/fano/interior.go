@@ -39,8 +39,8 @@ import (
 	"math"
 	"slices"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
+	"github.com/leiaSQ/goHPC/backend"
 	"gonum.org/v1/gonum/mat"
 )
 

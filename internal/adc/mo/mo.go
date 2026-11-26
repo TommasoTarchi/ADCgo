@@ -16,7 +16,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/leiaSQ/ADCgo/backend"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // Data is the parsed sidecar.

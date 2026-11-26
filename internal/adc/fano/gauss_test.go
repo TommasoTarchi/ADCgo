@@ -6,10 +6,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/lanczos"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
 	"github.com/leiaSQ/ADCgo/internal/adc/stieltjes"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // lorentzModel is a discretized continuum with an analytic width: PHP = diag(E_j) on a

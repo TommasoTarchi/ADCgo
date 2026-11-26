@@ -8,11 +8,11 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 
-	"github.com/leiaSQ/ADCgo/backend"
 	"github.com/leiaSQ/ADCgo/internal/adc/fano"
 	"github.com/leiaSQ/ADCgo/internal/adc/mo"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
 	"github.com/leiaSQ/ADCgo/internal/adc/sip"
+	"github.com/leiaSQ/goHPC/backend"
 )
 
 // schemeb.go — the driver side of Fano scheme B (-fano-scheme b): adapted intermediate
