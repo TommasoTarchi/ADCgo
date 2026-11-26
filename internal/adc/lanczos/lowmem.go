@@ -56,6 +56,10 @@ type lmBlock struct {
 // SolveLowMem runs the limited-memory block-Lanczos driver (see the file comment). It
 // returns the same Result shape as Solve, with spurious (ghost) roots already dropped.
 func SolveLowMem(op Operator, be backend.Backend, opts Options) Result {
+	// Before the SatelliteOperator assertion below: WrapQuant preserves that interface, so
+	// Mode B's Tarantelli gate is selected on the wrapper exactly as on the bare operator.
+	op = WrapQuant(op, be) // no-op unless ADCGO_QUANT is set; see quantize.go
+	defer releaseQuant(op)
 	n := op.Size()
 	main := op.MainBlockSize()
 	opts = opts.normalize(n)

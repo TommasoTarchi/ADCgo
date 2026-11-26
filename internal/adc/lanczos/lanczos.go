@@ -566,6 +566,8 @@ func orthBlock(be backend.Backend, basis, v backend.BlockView, pbuf backend.Vect
 // fills the whole upper triangle — which is why the M-images need not be retained.
 // The old code held both the basis and its images (2·dim·n) for the whole run.
 func Solve(op Operator, be backend.Backend, opts Options) Result {
+	op = WrapQuant(op, be) // no-op unless ADCGO_QUANT is set; see quantize.go
+	defer releaseQuant(op)
 	n := op.Size()
 	main := op.MainBlockSize()
 	opts = opts.normalize(n)

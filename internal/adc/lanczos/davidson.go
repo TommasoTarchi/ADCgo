@@ -87,6 +87,8 @@ func workingRoots(nr, n int) int {
 // SolveDavidson runs the block Davidson–Liu driver and returns the lowest NRoots Ritz
 // pairs (ascending) in the same Result shape as Solve.
 func SolveDavidson(op PreconOperator, be backend.Backend, opts Options) Result {
+	op = WrapQuantPrecon(op, be) // no-op unless ADCGO_QUANT is set; see quantize.go
+	defer releaseQuant(op)
 	n := op.Size()
 	main := op.MainBlockSize()
 	opts = opts.normalize(n)
