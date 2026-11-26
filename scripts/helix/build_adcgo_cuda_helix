@@ -70,54 +70,22 @@ fi
 #    whichever variant slurm schedules:
 #      A100 (gpu4/gpu8) = sm_80,  A40 (gpu4) = sm_86,  H200 (gpu8) = sm_90.
 #    sm_90 is needed for the H200 nodes (the SIP solve's ~45 GB basis wants their 141 GB).
-#    There are two sets, and ALL objects are required -- omitting one fails the link with
-#    "cannot find ..._kernels.o":
-#      ADCgo's own, linked by internal/adc/devkern/kernels_cuda.go: adc4_kernels.o
-#      (CVS-ADC(4) wert2 + order-3 SIP c22) and adc2dip_kernels.o (DIP satellite);
-#      goHPC's, linked by its backend/cuda_kernels.go: tensor_kernels.o (the generated
-#      sigma-build) and bandeig_kernels.o (the banded eigensolver's replay).
+#    There are two sets -- ADCgo's own in internal/adc/devkern and goHPC's -- and
+#    scripts/gpu/cuda_kernels.sh, which the GPU job scripts share, compiles both and
+#    exports the GOWORK the build below needs; it says where each object lives and why
+#    goHPC's are compiled in a copy.
 # -Xptxas -v prints per-kernel register counts and spill store/load bytes. A spill to local
 # memory is global-memory traffic in disguise, and these kernels carry sizeable per-thread
 # arrays (adc2dip_kernels.cu's double d[9], adc4_kernels.cu's double vint[31]) whose spill
 # status has never been measured. On by default — it is a handful of lines per kernel and the
-# build is rare. Silence with PTXAS_VERBOSE=0.
+# build is rare. Silence with PTXAS_VERBOSE=0. This script always recompiles ADCgo's own.
 ptxas_v="-Xptxas -v"
 [ "${PTXAS_VERBOSE:-1}" = "0" ] && ptxas_v=""
 
 echo "#begin<nvcc>"
-for ker in adc4_kernels adc2dip_kernels; do
-    echo "nvcc: $ker.cu"
-    nvcc -O3 -std=c++14 \
-         $ptxas_v \
-         -gencode arch=compute_80,code=sm_80 \
-         -gencode arch=compute_86,code=sm_86 \
-         -gencode arch=compute_90,code=sm_90 \
-         -c "internal/adc/devkern/$ker.cu" \
-         -o "internal/adc/devkern/$ker.o"
-done
-
-# goHPC's kernels are compiled by goHPC's own script, beside their sources. A tagged
-# goHPC sits in the read-only module cache: then the module is copied into .build/goHPC,
-# compiled there, and this build is pointed at the copy by a workspace file (go.mod is
-# not touched). A goHPC checkout that a go.work of your own names is compiled in place.
-# bandeig_kernels.cu uses explicit __dmul_rn/__dadd_rn/__dsub_rn intrinsics rather than
-# relying on -fmad=false, so its bit-exactness against the Go host path does not depend on
-# the flags used there; TestGPUBandEigReplayParity is the only thing that can confirm it.
-gohpc="$(go list -m -f '{{.Dir}}' github.com/leiaSQ/goHPC)"
-[ -n "$gohpc" ] && [ -d "$gohpc/backend" ] || {
-    echo "ERROR: could not locate github.com/leiaSQ/goHPC/backend (got '$gohpc')." >&2
-    exit 1
-}
-echo "goHPC     = $gohpc"
-if [ -w "$gohpc/backend" ]; then
-    "$gohpc/scripts/build_cuda_kernels"
-else
-    mkdir -p .build
-    bash "$gohpc/scripts/build_cuda_kernels" "$PWD/.build/goHPC"
-    printf 'go %s\n\nuse (\n\t%s\n\t%s\n)\n' "$need" "$PWD" "$PWD/.build/goHPC" > .build/go.work
-    export GOWORK="$PWD/.build/go.work"
-    echo "GOWORK    = $GOWORK"
-fi
+# shellcheck source=scripts/gpu/cuda_kernels.sh
+. "$root/scripts/gpu/cuda_kernels.sh"
+NVCC_EXTRA="$ptxas_v" KERNELS_FORCE=1 adcgo_cuda_kernels
 echo "#end<nvcc>"
 
 # 2. Build the cuda-tagged binary (links the .o via the two cgo files named above).

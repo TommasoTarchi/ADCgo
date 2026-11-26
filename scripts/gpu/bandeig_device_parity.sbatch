@@ -4,7 +4,7 @@
 #
 # This cannot be checked anywhere else. The hazard is FMA contraction: Go on amd64 does not fuse
 # a*b+c, nvcc and hipcc do by default, and a fused product rounds once where Go rounds twice.
-# backend/bandeig_kernels.cu uses explicit __dmul_rn/__dadd_rn/__dsub_rn to prevent that, but
+# goHPC's backend/bandeig_kernels.cu uses explicit __dmul_rn/__dadd_rn/__dsub_rn to prevent that, but
 # "prevented" is a claim about a specific compiler on a specific architecture, and a mismatch shows
 # up as a wrong pole strength rather than as a crash. -eig-device stays off by default until this
 # passes on the hardware in question.
@@ -37,18 +37,11 @@ echo "host=$(hostname) date=$(date -Is)"
 # compute_cap, not just the model name: a pass is a claim about an architecture, and this cluster
 # hands out A40 (sm_86) and H200 (sm_90) from the same pool unless --gres pins the model.
 nvidia-smi --query-gpu=index,name,compute_cap --format=csv,noheader
-# The kernel object must be current: `go build -tags cuda` links whatever .o is on disk and will
-# NOT recompile the .cu.
-if [ backend/bandeig_kernels.cu -nt backend/bandeig_kernels.o ]; then
-    echo "recompiling bandeig_kernels.cu"
-    # Compile to a job-unique temp and rename. Two jobs that both find the .o stale would otherwise
-    # write the same path concurrently, and a link picking up a half-written object fails in a way that
-    # looks like a kernel bug. rename(2) is atomic within the filesystem, so a concurrent `go build`
-    # sees either the old object or the new one, both of which are correct code.
-    nvcc -O3 -std=c++14 -gencode arch=compute_90,code=sm_90 \
-        -c backend/bandeig_kernels.cu -o "backend/bandeig_kernels.o.$SLURM_JOB_ID" || exit 1
-    mv -f "backend/bandeig_kernels.o.$SLURM_JOB_ID" backend/bandeig_kernels.o || exit 1
-fi
+# The kernel object must be current: `go build -tags cuda` links whatever .o is on disk and
+# will NOT recompile a .cu. bandeig_kernels.cu is goHPC's; cuda_kernels.sh compiles it in a
+# copy of the module, once per goHPC version, and says how two jobs doing so do not collide.
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 echo "#begin<parity>"
 # -count=1 is MANDATORY here, not hygiene. go test caches by package and flags, not by which GPU
 # the job landed on, so without it a result from an earlier run on different hardware is replayed

@@ -39,6 +39,8 @@ export CGO_LDFLAGS="-L$CUDA_HOME/lib64 -lcudart -lcublas -lcusolver"
 export PATH=/home/hd/hd_hd/hd_hh323/opt/go/bin:$PATH
 FC="${FC:?set FC=/path/to/system.fcidump}"
 fail=0
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 hdr() { echo; echo "################ $* ################"; }
 
 echo "host=$(hostname)  date=$(date -Is)"
@@ -52,7 +54,7 @@ hdr "1. cuda-tagged unit tests on real hardware"
 # Full output to a log, never piped through tail: a panic's MESSAGE precedes its stack, so
 # tailing the stream discards exactly the line that says what went wrong.
 T1=$root/gpu-probe-$SLURM_JOB_ID.units.log
-go test -tags cuda -count=1 -timeout 40m -v ./backend/ ./internal/adc/dip/ ./internal/adc/sip/ > "$T1" 2>&1
+go test -tags cuda -count=1 -timeout 40m -v github.com/leiaSQ/goHPC/backend ./internal/adc/dip/ ./internal/adc/sip/ > "$T1" 2>&1
 rc=$?
 grep -E "^--- FAIL|^--- PASS|^ok |^FAIL" "$T1" | tail -30
 if [ "$rc" != 0 ]; then

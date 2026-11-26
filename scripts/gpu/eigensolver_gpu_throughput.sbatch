@@ -38,16 +38,11 @@ export CGO_CFLAGS="-I$CUDA_HOME/include"
 export CGO_LDFLAGS="-L$CUDA_HOME/lib64 -lcudart -lcublas -lcusolver"
 echo "host=$(hostname) date=$(date -Is)"
 nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
-if [ backend/bandeig_kernels.cu -nt backend/bandeig_kernels.o ]; then
-    echo "recompiling bandeig_kernels.cu"
-    # Compile to a job-unique temp and rename. Two jobs that both find the .o stale would otherwise
-    # write the same path concurrently, and a link picking up a half-written object fails in a way that
-    # looks like a kernel bug. rename(2) is atomic within the filesystem, so a concurrent `go build`
-    # sees either the old object or the new one, both of which are correct code.
-    nvcc -O3 -std=c++14 -gencode arch=compute_90,code=sm_90 \
-        -c backend/bandeig_kernels.cu -o "backend/bandeig_kernels.o.$SLURM_JOB_ID" || exit 1
-    mv -f "backend/bandeig_kernels.o.$SLURM_JOB_ID" backend/bandeig_kernels.o || exit 1
-fi
+# The kernel object must be current: `go build -tags cuda` links whatever .o is on disk and
+# will NOT recompile a .cu. bandeig_kernels.cu is goHPC's; cuda_kernels.sh compiles it in a
+# copy of the module, once per goHPC version, and says how two jobs doing so do not collide.
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 echo "#begin<parity>"
 # -count=1: go test caches by package and flags, NOT by which GPU the job got.
 go test -tags cuda -count=1 ./internal/adc/lanczos/ -run 'TestGPUBandEigReplayParity' -timeout 20m

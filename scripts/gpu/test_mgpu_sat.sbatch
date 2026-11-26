@@ -41,15 +41,8 @@ echo "--- interconnect (peer path must be NVLink/NVSwitch, not PHB, for the gath
 nvidia-smi topo -m 2>/dev/null || true
 
 echo "#begin<nvcc>"
-for ker in adc4_kernels adc2dip_kernels; do
-    echo "nvcc: $ker.cu"
-    nvcc -O3 -std=c++14 \
-         -gencode arch=compute_80,code=sm_80 \
-         -gencode arch=compute_86,code=sm_86 \
-         -gencode arch=compute_90,code=sm_90 \
-         -c "backend/$ker.cu" \
-         -o "backend/$ker.o"
-done
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 echo "#end<nvcc>"
 
 # -v so a SKIP (too few devices / not peered) is visible rather than passing silently.

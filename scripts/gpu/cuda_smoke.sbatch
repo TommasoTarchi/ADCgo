@@ -36,6 +36,8 @@ export CGO_CFLAGS="-I$CUDA_HOME/include"
 export CGO_LDFLAGS="-L$CUDA_HOME/lib64 -lcudart -lcublas -lcusolver"
 export PATH=/home/hd/hd_hd/hd_hh323/opt/go/bin:$PATH
 fail=0
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 # ADCGO lets a candidate build be smoked without overwriting $root/adcgo-cuda, which other queued
 # jobs resolve by default and would otherwise silently pick up.
 ADCGO="${ADCGO:-$root/adcgo-cuda}"

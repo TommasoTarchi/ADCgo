@@ -60,29 +60,25 @@ echo "go   = $(go version)"
 echo "san  = $("$SAN" --version 2>&1 | head -1)"
 nvidia-smi -L
 
-# The committed .o files are prebuilt; recompile so the sanitizer has current line info for
-# whatever is in the working tree.
+# Recompile ADCgo's kernels with line info, so the sanitizer names a source line for
+# whatever is in the working tree. (goHPC's two are compiled without it, by its own script.)
 echo "#begin<nvcc>"
-for ker in adc4_kernels adc2dip_kernels; do
-    nvcc -O3 -std=c++14 -lineinfo \
-         -gencode arch=compute_90,code=sm_90 \
-         -c "backend/$ker.cu" \
-         -o "backend/$ker.o" || { echo "nvcc failed for $ker" >&2; exit 1; }
-done
+. "$root/scripts/gpu/cuda_kernels.sh" && NVCC_EXTRA=-lineinfo KERNELS_FORCE=1 adcgo_cuda_kernels || exit 1
 echo "#end<nvcc>"
 
 # Build the test binaries once; running them under the sanitizer separately keeps `go test`'s own
 # toolchain launches (compiler, linker) out of the sanitized process.
 echo "#begin<go test -c>"
 go test -tags cuda -c -o dip.test     ./internal/adc/dip     || { echo "build dip.test failed" >&2; exit 1; }
-go test -tags cuda -c -o backend.test ./backend || { echo "build backend.test failed" >&2; exit 1; }
+go test -tags cuda -c -o backend.test github.com/leiaSQ/goHPC/backend || { echo "build backend.test failed" >&2; exit 1; }
 echo "#end<go test -c>"
 
 rc_total=0
 log_all="${SLURM_SUBMIT_DIR:-$root}/dip-mgpu-sanitize-${SLURM_JOB_ID:-local}.log"
 : > "$log_all"
-run() {   # run <label> <pkgdir> <binary> <-run regexp>
+run() {   # run <label> <pkgdir> <binary> <-run regexp>; pkgdir is relative to $root or absolute
     local label="$1" pkgdir="$2" bin="$3" pat="$4"
+    case "$pkgdir" in /*) ;; *) pkgdir="$root/$pkgdir" ;; esac
     echo
     echo "################ $label ################"
     # MUST run from the package directory. The tests open fixtures by a path relative to their
@@ -94,7 +90,7 @@ run() {   # run <label> <pkgdir> <binary> <-run regexp>
     # --tool memcheck catches OOB / misaligned global, shared and local accesses.
     # --launch-timeout 0: the Go runtime can leave a kernel queued behind a long host phase.
     # --report-api-errors no: cudaGetLastError() polling makes benign sticky-error noise here.
-    ( cd "$root/$pkgdir" && \
+    ( cd "$pkgdir" && \
       "$SAN" --tool memcheck --launch-timeout 0 --report-api-errors no \
              --print-limit 20 \
              "$root/$bin" -test.run "$pat" -test.v -test.timeout 60m ) 2>&1 | tee -a "$log_all"
@@ -108,7 +104,7 @@ run "dip mgpu satellite (per-device bands + NVLink gather)" internal/adc/dip    
 # The batched fill/gemm path and the single-device satellite apply, same kernels, simpler driver.
 run "dip matfree batched + device"                          internal/adc/dip     dip.test     'MatFree|Batched|Satellite'
 # Distributed backend plumbing: peer copies, row-band slicing, batched GEMM regrouping.
-run "backend distributed + gpu"                             backend backend.test 'Dist|Peer|Gemm|Repro|MultiDevice'
+run "backend distributed + gpu"                             "$GOHPC_DIR/backend" backend.test 'Dist|Peer|Gemm|Repro|MultiDevice'
 
 echo
 # A green run means nothing unless the key test actually EXECUTED. Both failure modes seen so far

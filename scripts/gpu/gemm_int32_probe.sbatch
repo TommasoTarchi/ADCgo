@@ -52,12 +52,15 @@ echo "host=$(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 echo "go = $(go version)"
 
+# Kernel objects and the workspace file a cuda build links against: scripts/gpu/cuda_kernels.sh.
+. "$root/scripts/gpu/cuda_kernels.sh" && adcgo_cuda_kernels || exit 1
 echo "#begin<go test -c>"
-go test -tags cuda -c -o backend.test ./backend || { echo "build failed" >&2; exit 1; }
+# The backend package is goHPC's (github.com/leiaSQ/goHPC); the test lives there.
+go test -tags cuda -c -o backend.test github.com/leiaSQ/goHPC/backend || { echo "build failed" >&2; exit 1; }
 echo "#end<go test -c>"
 
 # Run from the package directory — fixtures are package-relative (see dip_mgpu_sanitize.sbatch).
-cd "$root/backend"
+cd "$GOHPC_DIR/backend"
 
 echo
 echo "################ 1. plain run (value check) ################"

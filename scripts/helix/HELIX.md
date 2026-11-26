@@ -49,8 +49,13 @@ then a `-tags cuda` Go build. Both are wrapped in one script:
 scripts/helix/build_adcgo_cuda_helix        # -> ./adcgo-cuda at the repo root
 ```
 
-It (1) `nvcc`-compiles `backend/adc4_kernels.cu` for every Helix GPU model
-(`-gencode` sm_80 for A100, sm_86 for A40, sm_90 for H200), then (2) `go build -tags cuda`.
+It (1) `nvcc`-compiles the device kernels for every Helix GPU model (`-gencode` sm_80 for
+A100, sm_86 for A40, sm_90 for H200), then (2) `go build -tags cuda`. The kernels are two
+sets: ADCgo's own in `internal/adc/devkern`, and those of the backend, which is the
+[goHPC](https://github.com/leiaSQ/goHPC) module. goHPC's are compiled in a copy under
+`.build/` and the build is pointed at it with `GOWORK`; `scripts/gpu/cuda_kernels.sh` does
+both and every GPU job script sources it, so a bare `go test -tags cuda` in a fresh shell
+needs it sourced first.
 It reads the CUDA prefix from `$CUDA_HOME` (set by `module load devel/cuda/13.2`); override
 with `CGO_CFLAGS`/`CGO_LDFLAGS` if the headers/libs live elsewhere.
 
