@@ -356,3 +356,48 @@ func TestWrapQuantOffByDefault(t *testing.T) {
 		t.Fatalf("WrapQuant wrapped the operator with ADCGO_QUANT unset: %T", got)
 	}
 }
+
+// releasingOp is an operator with a Release of its own, as dip.Matrix, sip.Matrix and the
+// generated sigma operator have.
+type releasingOp struct {
+	*quantTestOp
+	released int
+}
+
+func (o *releasingOp) Release() { o.released++ }
+func (o *releasingOp) Diagonal(be backend.Backend) backend.Vector {
+	d := make(backend.Vec, o.m.Rows)
+	for i := range d {
+		d[i] = o.m.At(i, i)
+	}
+	return be.Upload(d)
+}
+
+func TestSolversDoNotReleaseTheCallersOperator(t *testing.T) {
+	// Every driver defers releaseQuant on the operator it was given. With ADCGO_QUANT
+	// unset that is the caller's own operator, and releasing it there freed the blocks a
+	// second solve on the same operator needs: the generated sigma operator's triplet
+	// solve came back with 10 Krylov vectors of 960 after its singlet solve.
+	if _, on := quantEnv(); on {
+		t.Skip("ADCGO_QUANT is set for this process")
+	}
+	be := backend.Gonum{}
+	const n, main = 24, 4
+	newOp := func() *releasingOp {
+		return &releasingOp{quantTestOp: &quantTestOp{m: quantTestMatrix(n), main: main, be: be}}
+	}
+	for _, tc := range []struct {
+		name  string
+		solve func(op *releasingOp)
+	}{
+		{"Solve", func(op *releasingOp) { Solve(op, be, Options{Block: main, MaxDim: n}) }},
+		{"SolveLowMem", func(op *releasingOp) { SolveLowMem(op, be, Options{Block: main, MaxDim: n}) }},
+		{"SolveDavidson", func(op *releasingOp) { SolveDavidson(op, be, Options{Block: main, NRoots: 2}) }},
+	} {
+		op := newOp()
+		tc.solve(op)
+		if op.released != 0 {
+			t.Errorf("%s released the caller's operator %d time(s)", tc.name, op.released)
+		}
+	}
+}

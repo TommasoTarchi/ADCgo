@@ -432,10 +432,18 @@ type quantPreconOp struct {
 
 func (q *quantPreconOp) Diagonal(be backend.Backend) backend.Vector { return q.precon.Diagonal(be) }
 
-// releaseQuant frees a quantizing wrapper's scratch panel at the end of a solve. A no-op
-// when ADCGO_QUANT is unset, since op is then the caller's own operator.
+// releaseQuant frees a quantizing wrapper's scratch panel at the end of a solve, and does
+// nothing to anything else. With ADCGO_QUANT unset op is the CALLER'S operator, and the
+// caller's operators have a Release of their own (dip.Matrix, sip.Matrix, the generated
+// sigma operator): it must not be reached from here, or a second solve on the same
+// operator runs on freed blocks. So the wrappers are named, not asked for by method.
 func releaseQuant(op any) {
-	if r, ok := op.(interface{ Release() }); ok {
-		r.Release()
+	switch q := op.(type) {
+	case *quantOp:
+		q.Release()
+	case *quantSatOp:
+		q.Release()
+	case *quantPreconOp:
+		q.Release()
 	}
 }
