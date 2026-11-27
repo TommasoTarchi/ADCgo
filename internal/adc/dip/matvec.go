@@ -1,6 +1,10 @@
 package dip
 
 import (
+	"fmt"
+	"os"
+	"time"
+
 	"github.com/leiaSQ/ADCgo/internal/adc/integrals"
 	"github.com/leiaSQ/ADCgo/internal/adc/matfree"
 	"github.com/leiaSQ/ADCgo/internal/adc/parallel"
@@ -25,6 +29,10 @@ type Matrix struct {
 
 	matFree       matfree.Mode // dense (default) vs matrix-free 3h1p↔3h1p satellite region
 	matFreeBudget int64        // Auto threshold: satellite dense bytes above which to go matrix-free
+
+	// ProfileLabel, when non-empty, makes the matrix print to stderr the wall time of its
+	// operator assembly and the dense/satellite split of every full apply. Set under -profile.
+	ProfileLabel string
 }
 
 // New builds the matrix engine for space sp over the given integrals and orbital
@@ -79,9 +87,7 @@ type assembledOp struct {
 // Every apply streams all of them, so this is the memory-traffic unit of a
 // mat-vec and the sizing input for a device-residency check.
 func (mx *Matrix) OperatorNNZ() (nnz, nblocks int) {
-	if mx.op == nil {
-		mx.op = mx.assemble()
-	}
+	mx.ensureAssembled()
 	for _, p := range mx.op.parts {
 		r, c := p.A.Dims()
 		nnz += r * c
@@ -493,9 +499,7 @@ func (mx *Matrix) BuildMatrix() backend.Mat {
 // — is a resident GemvN (plus a GemvT for off-diagonal blocks, realizing the
 // symmetric M). No host↔device transfer occurs per apply.
 func (mx *Matrix) ApplyFull(out, in backend.Vector) {
-	if mx.op == nil {
-		mx.op = mx.assemble()
-	}
+	mx.ensureAssembled()
 	mx.be.Zero(out)
 	for _, p := range mx.op.parts {
 		rows, cols := p.A.Dims()
@@ -527,12 +531,43 @@ func (mx *Matrix) ApplyFull(out, in backend.Vector) {
 // out must be a dedicated buffer with Ld == Rows; it is zeroed first, then every
 // block accumulates into it (beta = 1), mirroring ApplyFull's additive GEMVs.
 func (mx *Matrix) ApplyBlock(out, in backend.BlockView) {
-	if mx.op == nil {
-		mx.op = mx.assemble()
-	}
+	mx.ensureAssembled()
+	t0 := time.Now()
 	mx.applyBatches(mx.op.parts, mx.op.batches, out, in)
+	if mx.ProfileLabel != "" {
+		mx.syncAll() // charge the dense GEMMs to the dense part
+	}
+	t1 := time.Now()
 	for _, p := range mx.op.mf {
 		p.apply(in, out)
+	}
+	if mx.ProfileLabel != "" {
+		mx.syncAll()
+		fmt.Fprintf(os.Stderr, "time %s full apply: dense %.2fs satellite %.2fs\n",
+			mx.ProfileLabel, t1.Sub(t0).Seconds(), time.Since(t1).Seconds())
+	}
+}
+
+// ensureAssembled builds the operator on first use and, when profiling, reports how long it took.
+func (mx *Matrix) ensureAssembled() {
+	if mx.op != nil {
+		return
+	}
+	t0 := time.Now()
+	mx.op = mx.assemble()
+	if mx.ProfileLabel != "" {
+		mx.syncAll()
+		fmt.Fprintf(os.Stderr, "time %s assemble operator %10.2fs\n", mx.ProfileLabel, time.Since(t0).Seconds())
+	}
+}
+
+// syncAll waits until every device of the backend has finished its queued work, so that a host
+// timer measures the GPU work and not only its launch. Host backends need no wait.
+func (mx *Matrix) syncAll() {
+	if pd, ok := mx.be.(backend.PartitionedDevices); ok {
+		backend.SyncParts(pd)
+	} else if pc, ok := mx.be.(backend.PeerCopier); ok {
+		pc.Sync()
 	}
 }
 
@@ -543,9 +578,7 @@ func (mx *Matrix) ApplyBlock(out, in backend.BlockView) {
 // what lets the banded eigensolver read pole strengths from the projected eigenvectors'
 // top rows without keeping the basis. out must be a dedicated buffer with Ld == Rows.
 func (mx *Matrix) ApplyBlockSatellite(out, in backend.BlockView) {
-	if mx.op == nil {
-		mx.op = mx.assemble()
-	}
+	mx.ensureAssembled()
 	mx.applyBatches(mx.op.satParts, mx.op.satBatches, out, in)
 	// Under matrix-free the satellite region lives in op.mf, not satParts; apply it here so
 	// ApplyBlockSatellite realizes the same 3h1p↔3h1p sub-operator the dense path does.

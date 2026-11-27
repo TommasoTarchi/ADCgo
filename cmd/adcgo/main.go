@@ -279,7 +279,9 @@ func main() {
 		os.Exit(2)
 	}
 
+	done := phaseTimer(*profile, "read fcidump")
 	d, err := fcidump.ReadFile(*path)
+	done()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "adcgo:", err)
 		os.Exit(1)
@@ -807,6 +809,18 @@ func reportTiming(label string, n, main int, tm lanczos.Timing) {
 		tm.Back.Seconds(), pct(tm.Back))
 }
 
+// phaseTimer starts timing one phase of the run. When on, the returned function prints
+// "time <what> <seconds>" to stderr; when off, it does nothing.
+func phaseTimer(on bool, what string) func() {
+	if !on {
+		return func() {}
+	}
+	t0 := time.Now()
+	return func() {
+		fmt.Fprintf(os.Stderr, "time %-44s %10.2fs\n", what, time.Since(t0).Seconds())
+	}
+}
+
 // davidsonOpts assembles the block-Davidson options from the -nroots/-maxdavsp/-maxdavit/
 // -convthr flags. wantFull retains the full Ritz vectors (the SIP-TDM path needs them).
 func davidsonOpts(nroots, maxdavsp, maxdavit int, convthr float64, wantFull bool) lanczos.Options {
@@ -864,6 +878,9 @@ func solveDIPSector(ch *chooser, cfg dipConfig, sp *dip.Space, ints *integrals.S
 			})
 	}
 	mx := dip.New(sp, ints, eps, be)
+	if cfg.profile {
+		mx.ProfileLabel = label
+	}
 	mx.SetMatFree(cfg.matFree, cfg.matFreeBudget)
 
 	// Pre-flight device-memory guard for the short-recurrence path: SolveLowMem keeps three
@@ -907,6 +924,7 @@ func solveDIPSector(ch *chooser, cfg dipConfig, sp *dip.Space, ints *integrals.S
 // filtering, atom-resolved populations), the shared tail of the single-backend and
 // multi-GPU solve paths.
 func analyzeDIPSector(label string, cfg dipConfig, sp *dip.Space, res lanczos.Result, moData *mo.Data, opts analyze.Options) analyze.Sector {
+	defer phaseTimer(cfg.profile, label+" analyze")()
 	if cfg.profile {
 		reportTiming(label, sp.Size(), sp.MainBlockSize(), res.Timing)
 	}
@@ -940,6 +958,9 @@ func solveDIPSectorMGPU(subs []backend.Backend, cfg dipConfig, sp *dip.Space, in
 		be = d
 	}
 	mx := dip.New(sp, ints, eps, be)
+	if cfg.profile {
+		mx.ProfileLabel = label
+	}
 	mx.SetMatFree(cfg.matFree, cfg.matFreeBudget)
 
 	// Per-GPU footprint = the ~4 live n×main Krylov panels + the block-sparse operator, split
@@ -1041,9 +1062,12 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 			"Mode A retains the full basis on the host and is not resumable (got -lowmem-block %d)",
 			cfg.lowmemBlock)
 	}
+	defer phaseTimer(cfg.profile, "dip run (after reading the fcidump)")()
 	nocc := mp.NOcc(d)
 	eps := mp.OrbitalEnergies(d, nocc)
+	done := phaseTimer(cfg.profile, "set up backend")
 	ch, err := newChooser(cfg.backend, cfg.profile, cfg.gpus)
+	done()
 	if err != nil {
 		return err
 	}
@@ -1056,7 +1080,9 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 	if err != nil {
 		return err
 	}
+	done = phaseTimer(cfg.profile, "build integral store")
 	ints := integrals.New(d, nocc, orbSym)
+	done()
 
 	var moData *mo.Data
 	if cfg.moPath != "" {
@@ -1076,6 +1102,7 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 		sp        *dip.Space
 	}
 	var items []dipItem
+	done = phaseTimer(cfg.profile, "build configuration spaces")
 	for _, spin := range spins {
 		for _, targetSym := range syms {
 			sp := dip.NewSpace(nocc, d.NORB, orbSym, targetSym, spin)
@@ -1085,6 +1112,7 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 			items = append(items, dipItem{spin, targetSym, sp})
 		}
 	}
+	done()
 
 	results := make([]analyze.Sector, len(items))
 
@@ -1094,11 +1122,14 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 		if cfg.solver != "lanczos-lowmem" {
 			return fmt.Errorf("-mgpu requires -solver lanczos-lowmem (got %q)", cfg.solver)
 		}
+		done := phaseTimer(cfg.profile, "set up GPU partitions")
 		subs, err := mgpuSubs(ch, cfg)
+		done()
 		if err != nil {
 			return err
 		}
 		for i, it := range items {
+			done := phaseTimer(cfg.profile, fmt.Sprintf("dip spin=%d irrep=%d sector total", it.spin, it.targetSym+1))
 			sec, err := solveDIPSectorMGPU(subs, cfg, it.sp, ints, eps, it.spin, it.targetSym, moData, opts)
 			if err != nil {
 				return err
@@ -1106,10 +1137,12 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 			results[i] = sec
 			// Persist before starting the next sector: this one's checkpoints are already gone.
 			writeSectorJSON(cfg, d.NORB, d.NELEC, sec, it.spin, it.targetSym+1)
+			done()
 		}
 	} else {
 		solve := func(w *chooser, i int) error {
 			it := items[i]
+			done := phaseTimer(cfg.profile, fmt.Sprintf("dip spin=%d irrep=%d sector total", it.spin, it.targetSym+1))
 			sec, err := solveDIPSector(w, cfg, it.sp, ints, eps, it.spin, it.targetSym, moData, opts)
 			if err != nil {
 				return err
@@ -1117,6 +1150,7 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 			results[i] = sec
 			// Distinct path per sector, so this is safe from the concurrent dispatch too.
 			writeSectorJSON(cfg, d.NORB, d.NELEC, sec, it.spin, it.targetSym+1)
+			done()
 			return nil
 		}
 		if len(ch.pool) >= 2 {
@@ -1132,6 +1166,7 @@ func runDIP(d *fcidump.Data, cfg dipConfig) error {
 		}
 	}
 	doc.Sectors = append(doc.Sectors, results...)
+	defer phaseTimer(cfg.profile, "write output")()
 
 	if cfg.spec.enabled {
 		// Without -mo (or with an explicit -bare) there are no atom-resolved
