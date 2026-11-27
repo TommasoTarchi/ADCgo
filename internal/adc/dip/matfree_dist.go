@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 	"unsafe"
 
@@ -401,9 +402,33 @@ func (mx *Matrix) newSatBatchedPerDevice(pd backend.PartitionedDevices) matFreeP
 		}
 	})
 
+	prof := profWindowFromEnv()
+	calls := 0
+	profileAll := func(start bool) {
+		backend.SyncParts(pd) // GPUs idle at both edges of the window
+		for d := range nd {
+			if dev, ok := pd.PartDevice(d); ok {
+				if start {
+					devkern.ProfilerStart(dev)
+				} else {
+					devkern.ProfilerStop(dev)
+				}
+			}
+		}
+	}
+
 	apply := func(in, out backend.BlockView) {
+		call := calls
+		calls++
+		recording := false
 		nchunkCols := (in.Cols + w - 1) / w
 		for c0 := 0; c0 < in.Cols; c0 += w {
+			chunk := c0 / w
+			if prof.on && call == prof.apply && chunk == 0 {
+				profileAll(true)
+				recording = true
+			}
+
 			cw := min(w, in.Cols-c0)
 			tChunk := time.Now()
 
@@ -479,6 +504,14 @@ func (mx *Matrix) newSatBatchedPerDevice(pd backend.PartitionedDevices) matFreeP
 				tSync1.Round(time.Millisecond), tGather.Round(time.Millisecond), tSync2.Round(time.Millisecond),
 				tFill.Round(time.Millisecond), tGemm.Round(time.Millisecond),
 				agg.calls, agg.members, perCall, nFill, nd)
+
+			if recording && chunk+1 == prof.chunks {
+				profileAll(false)
+				recording = false
+			}
+		}
+		if recording { // ADCGO_PROF_CHUNKS exceeds the number of chunks
+			profileAll(false)
 		}
 		backend.SyncParts(pd) // fence outputs before the caller reads them
 	}
@@ -513,4 +546,29 @@ func (mx *Matrix) newSatelliteMatFreeDistributed(pg backend.PanelScatterAdd) mat
 		pg.AddPanel(out.V, yfull)
 	}
 	return matFreePart{apply: apply, release: func() {}}
+}
+
+type profWindow struct {
+	on            bool
+	apply, chunks int
+}
+
+// profWindowFromEnv reads the capture window: ADCGO_PROF_APPLY = which satellite apply to record
+// (0-based, = Lanczos iteration), ADCGO_PROF_CHUNKS = how many column chunks of it (default 3).
+func profWindowFromEnv() profWindow {
+	s := os.Getenv("ADCGO_PROF_APPLY")
+	if s == "" {
+		return profWindow{}
+	}
+	a, err := strconv.Atoi(s)
+	if err != nil || a < 0 {
+		panic("dip: ADCGO_PROF_APPLY must be a non-negative integer, got " + s)
+	}
+	c := 3
+	if s := os.Getenv("ADCGO_PROF_CHUNKS"); s != "" {
+		if c, err = strconv.Atoi(s); err != nil || c < 1 {
+			panic("dip: ADCGO_PROF_CHUNKS must be a positive integer, got " + s)
+		}
+	}
+	return profWindow{on: true, apply: a, chunks: c}
 }

@@ -20,3 +20,7 @@ func DipSatApply(backend.DeviceAccess, DipSatArgs) { panic(noCuda) }
 
 // DipSatFillJII materializes a batch of DIP satellite blocks into device scratch.
 func DipSatFillJII(backend.DeviceAccess, DipFillJIIArgs) []backend.DeviceMat { panic(noCuda) }
+
+// ProfilerStart / ProfilerStop do nothing in a build without the cuda tag.
+func ProfilerStart(backend.DeviceAccess) {}
+func ProfilerStop(backend.DeviceAccess)  {}

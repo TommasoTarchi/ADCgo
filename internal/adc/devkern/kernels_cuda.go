@@ -41,6 +41,10 @@ int adc2_dip_sat_apply(int nsat,int njii,int nijk,int b,int ldIn,int ldOut,
     const int* iO0,const int* iO1,const int* iO2,const int* iSt,const int* iVoff,const int* iNv,const int* iVir,
     const double* eri,const double* eps,const int* osym,
     const double* xin,double* yout);
+
+#include <cuda_profiler_api.h>
+static int adc_prof_start(void) { return (int)cudaProfilerStart(); }
+static int adc_prof_stop(void)  { return (int)cudaProfilerStop(); }
 */
 import "C"
 
@@ -141,4 +145,15 @@ func DipSatFillJII(dev backend.DeviceAccess, a DipFillJIIArgs) []backend.DeviceM
 		off += a.Rows[i] * a.Cols[i]
 	}
 	return out
+}
+
+// ProfilerStart / ProfilerStop open and close a profiler capture window on one GPU
+// (nsys --capture-range=cudaProfilerApi). Launch runs them on the thread that owns the
+// GPU, where its CUDA context is current.
+func ProfilerStart(dev backend.DeviceAccess) {
+	dev.Launch("cudaProfilerStart", func() int { return int(C.adc_prof_start()) })
+}
+
+func ProfilerStop(dev backend.DeviceAccess) {
+	dev.Launch("cudaProfilerStop", func() int { return int(C.adc_prof_stop()) })
 }
